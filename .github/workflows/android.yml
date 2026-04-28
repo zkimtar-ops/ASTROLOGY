@@ -61,27 +61,6 @@ jobs:
           android.enableJetifier=true
           EOF
 
-      - name: Force upgrade play-services in build.gradle
-        run: |
-          # إضافة إصدار جديد لـ play-services في dependencies
-          cat >> platforms/android/app/build.gradle << 'EOF'
-
-          configurations.all {
-              resolutionStrategy.eachDependency { DependencyResolveDetails details ->
-                  if (details.requested.group == 'com.google.android.gms') {
-                      if (details.requested.name == 'play-services-base') {
-                          details.useVersion '18.3.0'
-                          details.because 'Fix Invalid color in old version'
-                      }
-                      if (details.requested.name == 'play-services-basement') {
-                          details.useVersion '18.3.0'
-                          details.because 'Fix Invalid color in old version'
-                      }
-                  }
-              }
-          }
-          EOF
-
       - name: Setup Gradle Wrapper
         run: |
           TOOLS_DIR="platforms/android/tools"
@@ -120,56 +99,58 @@ jobs:
             -dname "CN=Zakaria" \
             -deststoretype pkcs12
 
-      - name: Fix play-services-base-11.0.4 bad values.xml
+      - name: First build to download dependencies
         run: |
           GRADLEW="platforms/android/tools/gradlew"
-
-          # تشغيل أول مرة لتحميل الـ dependencies
           "$GRADLEW" -p platforms/android :app:mergeReleaseResources \
             -x lint 2>/dev/null || true
 
-          # البحث عن الملف المشكل وإصلاحه
-          BAD_FILE=$(find /home/runner/.gradle/caches/transforms-4 \
-            -path "*/jetified-play-services-base-11.0.4/res/values/values.xml" \
-            2>/dev/null | head -1)
-
-          if [ -n "$BAD_FILE" ]; then
-            echo "✅ وجدنا الملف المشكل: $BAD_FILE"
-            echo "=== المحتوى قبل الإصلاح ==="
-            cat "$BAD_FILE"
-            
-            # إصلاح قيم اللون غير الصالحة باستخدام Python
-            python3 << PYEOF
+      - name: Fix all bad values.xml in gradle cache
+        run: |
+          python3 << 'PYEOF'
+          import os
           import re
 
-          path = "$BAD_FILE"
-          with open(path, 'r', encoding='utf-8') as f:
-              content = f.read()
+          cache_dir = os.path.expanduser("~/.gradle/caches")
+          fixed_count = 0
 
-          print("Before fix:")
-          print(content)
+          for root, dirs, files in os.walk(cache_dir):
+              for fname in files:
+                  if fname == "values.xml":
+                      fpath = os.path.join(root, fname)
+                      try:
+                          with open(fpath, 'r', encoding='utf-8', errors='ignore') as f:
+                              content = f.read()
+                          
+                          # عرض الملفات التي تحتوي على color
+                          if '<color' in content:
+                              print(f"\n=== {fpath} ===")
+                              print(content[:500])
+                              
+                              # حذف أي عنصر color يحتوي على قيمة غير صالحة (ليست hex)
+                              fixed = re.sub(
+                                  r'\s*<color\s+name="[^"]*">[^#<][^<]*</color>',
+                                  '',
+                                  content
+                              )
+                              
+                              if fixed != content:
+                                  with open(fpath, 'w', encoding='utf-8') as f:
+                                      f.write(fixed)
+                                  print(f"✅ Fixed: {fpath}")
+                                  fixed_count += 1
+                      except Exception as e:
+                          print(f"Error processing {fpath}: {e}")
 
-          # إصلاح قيم اللون غير الصالحة
-          fixed = re.sub(
-              r'<color name="[^"]*">[^<]*</color>',
-              lambda m: m.group(0) if re.search(r'#[0-9A-Fa-f]{3,8}', m.group(0)) else '',
-              content
-          )
-
-          with open(path, 'w', encoding='utf-8') as f:
-              f.write(fixed)
-
-          print("After fix:")
-          print(fixed)
+          print(f"\nTotal fixed: {fixed_count}")
           PYEOF
-          else
-            echo "⚠️ الملف غير موجود في cache بعد"
-            find /home/runner/.gradle/caches/transforms-4 -name "values.xml" 2>/dev/null | head -10
-          fi
 
       - name: Build APK and AAB
         run: |
           GRADLEW="platforms/android/tools/gradlew"
+
+          # مسح build السابق
+          rm -rf platforms/android/app/build/intermediates
 
           echo "=== بناء APK ==="
           "$GRADLEW" -p platforms/android :app:assembleRelease \
@@ -195,7 +176,7 @@ jobs:
           APK=$(find platforms/android -name "*.apk" | head -1)
           if [ -n "$APK" ]; then
             cp "$APK" output/Astrology_Final.apk
-            echo "✅ APK موجود"
+            echo "✅ APK: $APK"
           else
             echo "⚠️ لا يوجد APK"
           fi
@@ -203,7 +184,7 @@ jobs:
           AAB=$(find platforms/android -name "*.aab" | head -1)
           if [ -n "$AAB" ]; then
             cp "$AAB" output/Astrology_Final.aab
-            echo "✅ AAB موجود"
+            echo "✅ AAB: $AAB"
           else
             echo "⚠️ لا يوجد AAB"
           fi
