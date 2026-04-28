@@ -20,7 +20,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '20' # سنبقى على 20 حالياً لضمان استقرار Cordova
 
       - name: Install Cordova
         run: npm install -g cordova
@@ -29,32 +29,33 @@ jobs:
         run: |
           # 1. إنشاء المشروع
           cordova create build_dir com.zakaria.hoshinomichibiki "星の導き"
+          
+          # التأكد من وجود config.xml في الجذر
+          if [ ! -f config.xml ]; then echo "Error: config.xml not found!"; exit 1; fi
           cp config.xml build_dir/
+          
           cd build_dir
           
           # 2. إضافة المنصة والملحقات
           cordova platform add android
           cordova plugin add cordova-plugin-admob-free --variable ADMOB_APP_ID="ca-app-pub-9756015724360400~1341007605"
           
-          # 3. نسخ ملفات الويب
+          # 3. نسخ ملفات الويب (تأكد من وجود مجلد www في مستودعك)
           rm -rf www/*
-          cp -r ../www/* www/
+          if [ -d "../www" ]; then cp -r ../www/* www/; fi
           
           # 4. إنشاء مفتاح توقيع تلقائي (Keystore)
-          # سيتم إنشاء مفتاح باسم release.keystore بكلمة مرور 'password123'
           keytool -genkey -v -keystore release.keystore -alias app_alias -keyalg RSA -keysize 2048 -validity 10000 -storepass password123 -keypass password123 -dname "CN=Zakaria, OU=Dev, O=Edogawa, L=Tokyo, S=Tokyo, C=JP"
 
-          # 5. بناء APK و AAB بنسخة Release
+          # 5. بناء APK و AAB
           cordova build android --release -- --packageType=apk
           cordova build android --release -- --packageType=bundle
 
-          # 6. توقيع الـ APK يدوياً باستخدام المفتاح المنشأ
-          # البحث عن ملف الـ APK غير الموقع وتوقيعه
-          APK_PATH=$(find platforms/android/app/build/outputs/apk/release -name "*.apk")
+          # 6. توقيع الملفات
+          APK_PATH=$(find platforms/android/app/build/outputs/apk/release -name "*-release-unsigned.apk" -o -name "*-release.apk")
           jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA256 -keystore release.keystore -storepass password123 "$APK_PATH" app_alias
 
-          # 7. توقيع الـ AAB يدوياً
-          AAB_PATH=$(find platforms/android/app/build/outputs/bundle/release -name "*.aab")
+          AAB_PATH=$(find platforms/android/app/build/outputs/bundle/release -name "*-release.aab")
           jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA256 -keystore release.keystore -storepass password123 "$AAB_PATH" app_alias
 
       - name: Upload Signed APK
