@@ -20,43 +20,61 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20' # سنبقى على 20 حالياً لضمان استقرار Cordova
+          node-version: '20'
 
       - name: Install Cordova
         run: npm install -g cordova
 
       - name: Create Project and Build
         run: |
-          # 1. إنشاء المشروع
+          # 1. عرض الملفات الموجودة للتأكد من وجود config.xml و مجلد www
+          echo "Listing files in root:"
+          ls -R
+          
+          # 2. إنشاء المشروع
           cordova create build_dir com.zakaria.hoshinomichibiki "星の導き"
           
-          # التأكد من وجود config.xml في الجذر
-          if [ ! -f config.xml ]; then echo "Error: config.xml not found!"; exit 1; fi
+          # التحقق من وجود الملفات قبل النسخ
+          if [ ! -f config.xml ]; then echo "❌ Error: config.xml missing in root!"; exit 1; fi
           cp config.xml build_dir/
           
           cd build_dir
           
-          # 2. إضافة المنصة والملحقات
-          cordova platform add android
+          # 3. إضافة المنصة (استخدام نسخة مستقرة)
+          cordova platform add android@12.0.0
+          
+          # 4. تثبيت الإضافة مع معرف التطبيق
           cordova plugin add cordova-plugin-admob-free --variable ADMOB_APP_ID="ca-app-pub-9756015724360400~1341007605"
           
-          # 3. نسخ ملفات الويب (تأكد من وجود مجلد www في مستودعك)
+          # 5. نسخ ملفات الويب
           rm -rf www/*
-          if [ -d "../www" ]; then cp -r ../www/* www/; fi
+          if [ -d "../www" ]; then 
+            cp -r ../www/* www/
+          else
+            echo "❌ Error: www folder missing!"; exit 1;
+          fi
           
-          # 4. إنشاء مفتاح توقيع تلقائي (Keystore)
+          # 6. إنشاء مفتاح التوقيع
           keytool -genkey -v -keystore release.keystore -alias app_alias -keyalg RSA -keysize 2048 -validity 10000 -storepass password123 -keypass password123 -dname "CN=Zakaria, OU=Dev, O=Edogawa, L=Tokyo, S=Tokyo, C=JP"
 
-          # 5. بناء APK و AAB
+          # 7. بناء APK و AAB
+          echo "Building APK..."
           cordova build android --release -- --packageType=apk
+          
+          echo "Building AAB..."
           cordova build android --release -- --packageType=bundle
 
-          # 6. توقيع الملفات
-          APK_PATH=$(find platforms/android/app/build/outputs/apk/release -name "*-release-unsigned.apk" -o -name "*-release.apk")
-          jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA256 -keystore release.keystore -storepass password123 "$APK_PATH" app_alias
-
-          AAB_PATH=$(find platforms/android/app/build/outputs/bundle/release -name "*-release.aab")
-          jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA256 -keystore release.keystore -storepass password123 "$AAB_PATH" app_alias
+          # 8. توقيع الملفات (استخدام محددات أكثر مرونة للمسارات)
+          APK_FILE=$(find platforms/android/app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          AAB_FILE=$(find platforms/android/app/build/outputs/bundle/release -name "*.aab" | head -n 1)
+          
+          if [ -f "$APK_FILE" ]; then
+            jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA256 -keystore release.keystore -storepass password123 "$APK_FILE" app_alias
+          fi
+          
+          if [ -f "$AAB_FILE" ]; then
+            jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA256 -keystore release.keystore -storepass password123 "$AAB_FILE" app_alias
+          fi
 
       - name: Upload Signed APK
         uses: actions/upload-artifact@v4
