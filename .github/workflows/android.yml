@@ -1,4 +1,4 @@
-name: Final_Direct_Build
+name: Astrology_Final_Success
 
 on:
   push:
@@ -25,32 +25,39 @@ jobs:
       - name: Build
         run: |
           npm install -g cordova --no-audit
-          rm -rf node_modules package-lock.json platforms plugins
+          rm -rf platforms plugins node_modules
           
-          # إضافة المنصة والإضافات الأساسية (بدون AdMob عشان نكسر حلقة الفشل)
+          # 1. إضافة المنصة (أندرويد 13)
           cordova platform add android@13.0.0
-          cordova plugin add cordova-plugin-androidx
+          
+          # 2. تثبيت الإضافات (بدون AdMob خالص عشان نضمن الـ Build)
           cordova plugin add cordova-plugin-androidx-adapter
           
           cordova prepare android
 
-          # إجبار التوافق
+          # 3. إعدادات التوافق
           echo "android.useAndroidX=true" >> platforms/android/gradle.properties
           echo "android.enableJetifier=true" >> platforms/android/gradle.properties
           echo "android.aapt2.no-optimize=true" >> platforms/android/gradle.properties
+          
+          # 4. إنشاء المفتاح
+          keytool -genkey -v -keystore release.jks -alias key0 -keyalg RSA -keysize 2048 -validity 10000 -storepass 123456 -keypass 123456 -dname "CN=Zakaria" -deststoretype pkcs12
 
-          # إنشاء مفتاح توقيع سريع
-          keytool -genkey -v -keystore release.jks -alias astro_key -keyalg RSA -keysize 2048 -validity 10000 -storepass 123456 -keypass 123456 -dname "CN=Zakaria" -deststoretype pkcs12
-
-          # بناء مباشر عن طريق Gradle لتخطي تعقيدات كوردوفا
+          # 5. البناء (المسار الصحيح لـ gradlew)
           cd platforms/android
-          ./gradlew assembleRelease -Pandroid.injected.signing.store.file=$(pwd)/../../release.jks -Pandroid.injected.signing.store.password=123456 -Pandroid.injected.signing.key.alias=astro_key -Pandroid.injected.signing.key.password=123456
+          chmod +x gradlew
+          ./gradlew assembleRelease \
+            -Pandroid.injected.signing.store.file=$(pwd)/../../release.jks \
+            -Pandroid.injected.signing.store.password=123456 \
+            -Pandroid.injected.signing.key.alias=key0 \
+            -Pandroid.injected.signing.key.password=123456
 
+          # 6. تجميع الملف النهائي
           mkdir -p ../../output
-          cp app/build/outputs/apk/release/*.apk ../../output/Astrology_Final.apk
+          cp app/build/outputs/apk/release/*.apk ../../output/Final_Astrology.apk
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: App-Ready
+          name: APK_READY
           path: output/
