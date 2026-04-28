@@ -43,13 +43,33 @@ jobs:
             }' > package.json
           fi
 
+      - name: Create clean config.xml without admob
+        run: |
+          cat > config.xml << 'EOF'
+          <?xml version='1.0' encoding='utf-8'?>
+          <widget id="com.zakaria.hoshinomichibiki" version="1.0.0"
+            xmlns="http://www.w3.org/ns/widgets"
+            xmlns:cdv="http://cordova.apache.org/ns/1.0">
+            <name>星の導き</name>
+            <description>Astrology App</description>
+            <author email="zakaria@example.com" href="http://example.com">Zakaria</author>
+            <content src="index.html" />
+            <allow-navigation href="*" />
+            <allow-intent href="http://*/*" />
+            <allow-intent href="https://*/*" />
+            <platform name="android">
+              <allow-intent href="market:*" />
+            </platform>
+          </widget>
+          EOF
+
       - name: Clean Environment
         run: rm -rf platforms plugins
 
       - name: Add Android Platform
         run: cordova platform add android@13.0.0
 
-      - name: Add Plugins
+      - name: Add Only Safe Plugins
         run: |
           cordova plugin add cordova-plugin-androidx-adapter
           cordova prepare android
@@ -99,58 +119,9 @@ jobs:
             -dname "CN=Zakaria" \
             -deststoretype pkcs12
 
-      - name: First build to download dependencies
-        run: |
-          GRADLEW="platforms/android/tools/gradlew"
-          "$GRADLEW" -p platforms/android :app:mergeReleaseResources \
-            -x lint 2>/dev/null || true
-
-      - name: Fix all bad values.xml in gradle cache
-        run: |
-          python3 << 'PYEOF'
-          import os
-          import re
-
-          cache_dir = os.path.expanduser("~/.gradle/caches")
-          fixed_count = 0
-
-          for root, dirs, files in os.walk(cache_dir):
-              for fname in files:
-                  if fname == "values.xml":
-                      fpath = os.path.join(root, fname)
-                      try:
-                          with open(fpath, 'r', encoding='utf-8', errors='ignore') as f:
-                              content = f.read()
-                          
-                          # عرض الملفات التي تحتوي على color
-                          if '<color' in content:
-                              print(f"\n=== {fpath} ===")
-                              print(content[:500])
-                              
-                              # حذف أي عنصر color يحتوي على قيمة غير صالحة (ليست hex)
-                              fixed = re.sub(
-                                  r'\s*<color\s+name="[^"]*">[^#<][^<]*</color>',
-                                  '',
-                                  content
-                              )
-                              
-                              if fixed != content:
-                                  with open(fpath, 'w', encoding='utf-8') as f:
-                                      f.write(fixed)
-                                  print(f"✅ Fixed: {fpath}")
-                                  fixed_count += 1
-                      except Exception as e:
-                          print(f"Error processing {fpath}: {e}")
-
-          print(f"\nTotal fixed: {fixed_count}")
-          PYEOF
-
       - name: Build APK and AAB
         run: |
           GRADLEW="platforms/android/tools/gradlew"
-
-          # مسح build السابق
-          rm -rf platforms/android/app/build/intermediates
 
           echo "=== بناء APK ==="
           "$GRADLEW" -p platforms/android :app:assembleRelease \
