@@ -61,17 +61,36 @@ jobs:
           android.enableJetifier=true
           EOF
 
+      - name: Fix play-services version conflict
+        run: |
+          # رفع إصدار play-services-base من 11.0.4 إلى 18.x لإصلاح خطأ Invalid color
+          BUILD_GRADLE="platforms/android/app/build.gradle"
+          
+          echo "=== build.gradle قبل التعديل ==="
+          cat "$BUILD_GRADLE"
+
+          # إضافة force resolution لإصدار play-services محدث
+          cat >> "$BUILD_GRADLE" << 'EOF'
+
+          configurations.all {
+              resolutionStrategy {
+                  force 'com.google.android.gms:play-services-base:18.3.0'
+                  force 'com.google.android.gms:play-services-basement:18.3.0'
+                  force 'com.google.android.gms:play-services-tasks:18.1.0'
+              }
+          }
+          EOF
+
+          echo "=== build.gradle بعد التعديل ==="
+          cat "$BUILD_GRADLE"
+
       - name: Setup Gradle Wrapper
         run: |
           TOOLS_DIR="platforms/android/tools"
           mkdir -p "$TOOLS_DIR/gradle/wrapper"
 
-          # نسخ gradle-wrapper.jar الموجود على الجهاز مباشرة
           cp /usr/local/lib/android/sdk/extras/google/google_play_services/samples/unified/ActivityDemo/gradle/wrapper/gradle-wrapper.jar \
             "$TOOLS_DIR/gradle/wrapper/gradle-wrapper.jar"
-
-          echo "✅ gradle-wrapper.jar size:"
-          ls -lh "$TOOLS_DIR/gradle/wrapper/gradle-wrapper.jar"
 
           cat > "$TOOLS_DIR/gradle/wrapper/gradle-wrapper.properties" << 'EOF'
           distributionBase=GRADLE_USER_HOME
@@ -89,7 +108,6 @@ jobs:
           GRADLEW
 
           chmod +x "$TOOLS_DIR/gradlew"
-          echo "✅ Gradle Wrapper جاهز"
 
       - name: Generate Keystore
         run: |
