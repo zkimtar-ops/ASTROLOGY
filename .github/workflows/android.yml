@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Build & Auto-Sign (APK & AAB)
 
 on:
   push:
@@ -9,36 +9,62 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Source
-        uses: actions/checkout@v4 # تحديث لـ v4
+        uses: actions/checkout@v4
 
       - name: Setup Java JDK
-        uses: actions/setup-java@v4 # تحديث لـ v4
+        uses: actions/setup-java@v4
         with:
-          java-version: '17' # استخدام إصدار أحدث متوافق مع Gradle الجديد
+          java-version: '17'
           distribution: 'temurin'
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4 # تحديث لـ v4
+        uses: actions/setup-node@v4
         with:
           node-version: '20'
 
       - name: Install Cordova
         run: npm install -g cordova
 
-      - name: Create Project and Build APK
+      - name: Create Project and Build
         run: |
+          # 1. إنشاء المشروع
           cordova create build_dir com.zakaria.hoshinomichibiki "星の導き"
           cp config.xml build_dir/
           cd build_dir
+          
+          # 2. إضافة المنصة والملحقات
           cordova platform add android
-          # ملاحظة: تأكد من صحة معرف التطبيق أدناه
           cordova plugin add cordova-plugin-admob-free --variable ADMOB_APP_ID="ca-app-pub-9756015724360400~1341007605"
+          
+          # 3. نسخ ملفات الويب
           rm -rf www/*
           cp -r ../www/* www/
-          cordova build android --release
+          
+          # 4. إنشاء مفتاح توقيع تلقائي (Keystore)
+          # سيتم إنشاء مفتاح باسم release.keystore بكلمة مرور 'password123'
+          keytool -genkey -v -keystore release.keystore -alias app_alias -keyalg RSA -keysize 2048 -validity 10000 -storepass password123 -keypass password123 -dname "CN=Zakaria, OU=Dev, O=Edogawa, L=Tokyo, S=Tokyo, C=JP"
 
-      - name: Upload APK Artifact
+          # 5. بناء APK و AAB بنسخة Release
+          cordova build android --release -- --packageType=apk
+          cordova build android --release -- --packageType=bundle
+
+          # 6. توقيع الـ APK يدوياً باستخدام المفتاح المنشأ
+          # البحث عن ملف الـ APK غير الموقع وتوقيعه
+          APK_PATH=$(find platforms/android/app/build/outputs/apk/release -name "*.apk")
+          jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA256 -keystore release.keystore -storepass password123 "$APK_PATH" app_alias
+
+          # 7. توقيع الـ AAB يدوياً
+          AAB_PATH=$(find platforms/android/app/build/outputs/bundle/release -name "*.aab")
+          jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA256 -keystore release.keystore -storepass password123 "$AAB_PATH" app_alias
+
+      - name: Upload Signed APK
         uses: actions/upload-artifact@v4
         with:
-          name: Hoshi-no-Michibiki-APK
+          name: Signed-APK
           path: build_dir/platforms/android/app/build/outputs/apk/release/*.apk
+
+      - name: Upload Signed AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: Signed-AAB
+          path: build_dir/platforms/android/app/build/outputs/bundle/release/*.aab
