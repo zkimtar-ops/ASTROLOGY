@@ -49,11 +49,6 @@ jobs:
       - name: Add Android Platform
         run: cordova platform add android@13.0.0
 
-      - name: Show Full Platform Structure
-        run: |
-          echo "=== كل محتوى platforms/android ==="
-          find platforms/android -maxdepth 4 -type f | sort
-
       - name: Add Plugins
         run: |
           cordova plugin add cordova-plugin-androidx-adapter
@@ -66,43 +61,17 @@ jobs:
           android.enableJetifier=true
           EOF
 
-      - name: Generate Keystore
-        run: |
-          keytool -genkey -v \
-            -keystore ${{ github.workspace }}/release.jks \
-            -alias astro_key \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -storepass 123456 \
-            -keypass 123456 \
-            -dname "CN=Zakaria" \
-            -deststoretype pkcs12
-
       - name: Setup Gradle Wrapper
         run: |
-          # البحث عن gradle-wrapper.jar في node_modules
-          JAR=$(find /usr /home /opt -name "gradle-wrapper.jar" 2>/dev/null | head -1)
-          echo "gradle-wrapper.jar found at: $JAR"
-
-          # تحديد مجلد tools
           TOOLS_DIR="platforms/android/tools"
           mkdir -p "$TOOLS_DIR/gradle/wrapper"
 
-          # تحميل gradle-wrapper.jar من GitHub Releases الرسمي
-          curl -fsSL \
-            "https://github.com/gradle/gradle/releases/download/v8.7.0/gradle-8.7-bin.zip" \
-            -o /tmp/gradle.zip
-          unzip -q /tmp/gradle.zip -d /tmp/gradle-dist
-          REAL_JAR=$(find /tmp/gradle-dist -name "gradle-wrapper.jar" | head -1)
-          
-          if [ -z "$REAL_JAR" ]; then
-            # استخراج من داخل jar نفسه
-            find /tmp/gradle-dist -name "*.jar" | head -5
-          else
-            cp "$REAL_JAR" "$TOOLS_DIR/gradle/wrapper/gradle-wrapper.jar"
-            echo "✅ تم نسخ gradle-wrapper.jar"
-          fi
+          # نسخ gradle-wrapper.jar الموجود على الجهاز مباشرة
+          cp /usr/local/lib/android/sdk/extras/google/google_play_services/samples/unified/ActivityDemo/gradle/wrapper/gradle-wrapper.jar \
+            "$TOOLS_DIR/gradle/wrapper/gradle-wrapper.jar"
+
+          echo "✅ gradle-wrapper.jar size:"
+          ls -lh "$TOOLS_DIR/gradle/wrapper/gradle-wrapper.jar"
 
           cat > "$TOOLS_DIR/gradle/wrapper/gradle-wrapper.properties" << 'EOF'
           distributionBase=GRADLE_USER_HOME
@@ -120,8 +89,20 @@ jobs:
           GRADLEW
 
           chmod +x "$TOOLS_DIR/gradlew"
-          ls -la "$TOOLS_DIR/"
-          ls -la "$TOOLS_DIR/gradle/wrapper/"
+          echo "✅ Gradle Wrapper جاهز"
+
+      - name: Generate Keystore
+        run: |
+          keytool -genkey -v \
+            -keystore ${{ github.workspace }}/release.jks \
+            -alias astro_key \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -storepass 123456 \
+            -keypass 123456 \
+            -dname "CN=Zakaria" \
+            -deststoretype pkcs12
 
       - name: Build APK and AAB
         run: |
