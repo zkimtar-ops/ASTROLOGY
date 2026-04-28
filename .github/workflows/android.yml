@@ -1,4 +1,4 @@
-name: Build & Sign (Force Pass)
+name: Build & Sign (Surgery Mode)
 
 on:
   push:
@@ -27,40 +27,38 @@ jobs:
 
       - name: Build Android
         run: |
-          # 1. تنظيف شامل
-          rm -rf platforms/ plugins/ node_modules/
-          
-          # 2. إضافة المنصة
+          # 1. إضافة المنصة والإضافات
           cordova platform add android@13.0.0
-          
-          # 3. تثبيت الإضافة الحديثة فقط
           cordova plugin add cordova-plugin-androidx
           cordova plugin add cordova-plugin-androidx-adapter
           cordova plugin add community-cordova-plugin-admob --variable ADMOB_APP_ID="ca-app-pub-9756015724360400~1341007605"
           
-          # 4. إجبار إصدار Gradle 8.7
+          # 2. إجبار Gradle 8.7
           mkdir -p platforms/android/gradle/wrapper
           echo "distributionUrl=https\://services.gradle.org/distributions/gradle-8.7-bin.zip" > platforms/android/gradle/wrapper/gradle-wrapper.properties
           
-          # 5. [الحل السحري] تعطيل تدقيق AAPT2 نهائياً وتفعيل AndroidX
-          # هذه الأسطر تمنع النظام من فحص ملفات الـ XML التي تسبب الفشل
+          # 3. إعدادات AndroidX
           cat <<EOF > platforms/android/gradle.properties
           android.useAndroidX=true
           android.enableJetifier=true
           android.aapt2.no-optimize=true
-          android.view.inspector.enabled=false
           EOF
-          
-          # 6. إنشاء مفتاح التوقيع
+
+          # 4. الجراحة اليدوية: إصلاح ملف القيم المعطوب في مكتبة جوجل
+          # هذا الأمر سيبحث عن أي ملف values.xml يحتوي على تعريف لون غير صالح ويقوم بتنظيفه
+          echo "Patching Google Play Services resource error..."
+          find /home/runner/.gradle/caches/transforms-4/ -name "values.xml" -exec sed -i 's|<color name="common_google_signin_btn_text_dark_default">@.*</color>|<color name="common_google_signin_btn_text_dark_default">#ffffff</color>|g' {} + || true
+
+          # 5. إنشاء المفتاح
           keytool -genkey -v -keystore release.keystore -alias app_alias -keyalg RSA -keysize 2048 -validity 10000 -storepass password123 -keypass password123 -dname "CN=Zakaria, O=Dev, C=JP"
 
-          # 7. البناء مع تجاهل الأخطاء الصورية
-          # نستخدم -- -- لتمرير المعاملات مباشرة إلى Gradle
-          cordova build android --release -- --packageType=apk --packageType=bundle
+          # 6. البناء
+          cordova build android --release -- --packageType=apk
+          cordova build android --release -- --packageType=bundle
 
-          # 8. التوقيع الرقمي
-          find platforms/android/app/build/outputs -name "*.apk" -exec jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA256 -keystore release.keystore -storepass password123 {} app_alias \;
-          find platforms/android/app/build/outputs -name "*.aab" -exec jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA256 -keystore release.keystore -storepass password123 {} app_alias \;
+          # 7. التوقيع
+          find platforms/android/app/build/outputs -name "*.apk" -exec jarsigner -keystore release.keystore -storepass password123 {} app_alias \;
+          find platforms/android/app/build/outputs -name "*.aab" -exec jarsigner -keystore release.keystore -storepass password123 {} app_alias \;
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
