@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Ultimate Oracle - 究極の占星術システム</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;700&family=Shippori+Mincho:wght@800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --gold: #d4af37;
+            --bg: #030305;
+            --card-bg: rgba(255, 255, 255, 0.04);
+            --accent: #8e44ad;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+        body, html {
+            height: 100%; width: 100%;
+            background-color: var(--bg);
+            color: #ffffff;
+            font-family: 'Noto Sans JP', sans-serif;
+            overflow: hidden;
+        }
+
+        #app {
+            width: 100vw; height: 100vh;
+            background: radial-gradient(circle at center, #0f0f1a 0%, #030305 100%);
+            overflow-y: auto;
+            display: flex; flex-direction: column;
+        }
+
+        .screen { display: none; width: 100%; min-height: 100vh; padding: 20px; animation: fadeIn 0.5s ease; }
+        .screen.active { display: flex; flex-direction: column; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Welcome Screen */
+        .full-center { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; }
+        
+        .premium-card {
+            width: 100%; max-width: 420px;
+            background: var(--card-bg);
+            padding: 40px 25px;
+            border-radius: 40px;
+            border: 1px solid rgba(212, 175, 55, 0.15);
+            backdrop-filter: blur(25px);
+            box-shadow: 0 30px 60px rgba(0,0,0,0.7);
+        }
+
+        h1 { font-family: 'Shippori Mincho', serif; color: var(--gold); font-size: 2.4rem; margin-bottom: 5px; }
+        .subtitle { opacity: 0.5; font-size: 0.85rem; margin-bottom: 35px; letter-spacing: 2px; }
+
+        .input-group { margin-bottom: 22px; text-align: left; }
+        .input-group label { display: block; font-size: 0.7rem; color: var(--gold); margin-bottom: 8px; font-weight: 700; letter-spacing: 1px; }
+        
+        input {
+            width: 100%; padding: 16px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 14px;
+            color: #fff; font-size: 1rem; outline: none;
+            transition: all 0.3s;
+        }
+        input:focus { border-color: var(--gold); background: rgba(255, 255, 255, 0.08); }
+
+        .btn-start {
+            background: linear-gradient(135deg, #d4af37, #b8860b);
+            color: #000; border: none; padding: 18px;
+            border-radius: 50px; font-weight: 900; width: 100%;
+            cursor: pointer; font-size: 1.1rem; margin-top: 10px;
+            box-shadow: 0 10px 25px rgba(212, 175, 55, 0.2);
+        }
+
+        /* Planet Loader */
+        .loader-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #000; z-index: 9999;
+            display: none; flex-direction: column; justify-content: center; align-items: center;
+        }
+        .orbit-system {
+            width: 140px; height: 140px; border: 1px solid rgba(212, 175, 55, 0.2);
+            border-radius: 50%; position: relative; animation: rotate 4s linear infinite;
+        }
+        .planet-node {
+            width: 18px; height: 18px; background: var(--gold);
+            border-radius: 50%; position: absolute; top: -9px; left: 61px;
+            box-shadow: 0 0 20px var(--gold);
+        }
+        @keyframes rotate { to { transform: rotate(360deg); } }
+
+        /* Result Screen */
+        .result-container { padding: 10px 15px 80px 15px; }
+        .z-hero { text-align: center; padding: 40px 0; }
+        .z-symbol { font-size: 5rem; color: var(--gold); filter: drop-shadow(0 0 15px rgba(212,175,55,0.4)); }
+        
+        .main-card { background: var(--card-bg); border-radius: 30px; padding: 25px; margin-bottom: 20px; border: 1px solid rgba(255,255,255,0.05); }
+        .main-card h3 { color: var(--gold); font-size: 1rem; margin-bottom: 15px; display: flex; align-items: center; gap: 10px; }
+
+        .btn-detail {
+            background: rgba(212, 175, 55, 0.1);
+            color: var(--gold); border: 1px solid var(--gold);
+            padding: 16px; border-radius: 15px; font-weight: 700; width: 100%;
+            cursor: pointer; margin-top: 15px; display: flex; justify-content: center; align-items: center; gap: 10px;
+        }
+
+        #deep-reading-box { display: none; margin-top: 25px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 25px; animation: slideUp 0.7s ease; }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(40px); } to { opacity: 1; transform: translateY(0); } }
+
+        .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 20px 0; }
+        .stat-card { background: rgba(0,0,0,0.3); padding: 15px; border-radius: 18px; text-align: center; }
+        .stat-card span { display: block; font-weight: 900; font-size: 1.3rem; color: var(--gold); }
+        .stat-card small { opacity: 0.5; font-size: 0.65rem; }
+
+        .luck-ball { width: 34px; height: 34px; border: 1px solid var(--gold); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; color: var(--gold); }
+        
+        .reset-link { text-align: center; margin-top: 30px; opacity: 0.3; font-size: 0.8rem; text-decoration: underline; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <!-- Entry Screen -->
+    <div id="screen-entry" class="screen">
+        <div class="full-center">
+            <h1>星の導き</h1>
+            <p class="subtitle">UNIVERSAL ASTROLOGY SYSTEM</p>
+            
+            <div class="premium-card">
+                <div class="input-group">
+                    <label>お名前</label>
+                    <input type="text" id="in-name" placeholder="例：タナカ タロウ">
+                </div>
+                <div class="input-group">
+                    <label>母親のお名前 (母性エネルギー解析)</label>
+                    <input type="text" id="in-mname" placeholder="例：ハナコ">
+                </div>
+                <div class="input-group">
+                    <label>生年月日</label>
+                    <input type="date" id="in-birth">
+                </div>
+                <button class="btn-start" onclick="handleStart()">運命を解読する</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Planet Loader Overlay -->
+    <div id="planet-loader" class="loader-overlay">
+        <div class="orbit-system"><div class="planet-node"></div></div>
+        <h2 id="load-title" style="margin-top:35px; color:var(--gold); font-family: 'Shippori Mincho'; letter-spacing: 3px;"></h2>
+        <p id="load-sub" style="opacity:0.5; font-size:0.75rem; margin-top:12px;"></p>
+    </div>
+
+    <!-- Result Screen -->
+    <div id="screen-result" class="screen">
+        <div id="inject-result" class="result-container"></div>
+    </div>
+</div>
+
+<script>
+    const ZODIAC_DATA = [
+        { id: "Aries", name: "牡羊座", icon: "♈", range: [321, 419] },
+        { id: "Taurus", name: "牡牛座", icon: "♉", range: [420, 520] },
+        { id: "Gemini", name: "双子座", icon: "♊", range: [521, 621] },
+        { id: "Cancer", name: "蟹座", icon: "♋", range: [622, 722] },
+        { id: "Leo", name: "獅子座", icon: "♌", range: [723, 822] },
+        { id: "Virgo", name: "乙女座", icon: "♍", range: [823, 922] },
+        { id: "Libra", name: "天秤座", icon: "♎", range: [923, 1023] },
+        { id: "Scorpio", name: "蠍座", icon: "♏", range: [1024, 1122] },
+        { id: "Sagittarius", name: "射手座", icon: "♐", range: [1123, 1221] },
+        { id: "Capricorn", name: "山羊座", icon: "♑", range: [1222, 119] },
+        { id: "Aquarius", name: "水瓶座", icon: "♒", range: [120, 218] },
+        { id: "Pisces", name: "魚座", icon: "♓", range: [219, 320] }
+    ];
+
+    window.onload = () => {
+        const saved = localStorage.getItem('astro_v4_jp');
+        if (saved) {
+            buildReport(JSON.parse(saved));
+            switchScreen('screen-result');
+        } else {
+            switchScreen('screen-entry');
+        }
+    };
+
+    function switchScreen(id) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+    }
+
+    function handleStart() {
+        const name = document.getElementById('in-name').value;
+        const mname = document.getElementById('in-mname').value;
+        const birth = document.getElementById('in-birth').value;
+
+        if (!name || !mname || !birth) return;
+
+        const store = { name, mname, birth };
+        localStorage.setItem('astro_v4_jp', JSON.stringify(store));
+
+        triggerLoader("星位を測定中", "現在の天体図と同期しています...", 3000, () => {
+            buildReport(store);
+            switchScreen('screen-result');
+        });
+    }
+
+    function triggerLoader(title, sub, ms, callback) {
+        const loader = document.getElementById('planet-loader');
+        document.getElementById('load-title').innerText = title;
+        document.getElementById('load-sub').innerText = sub;
+        loader.style.display = 'flex';
+        setTimeout(() => {
+            loader.style.display = 'none';
+            callback();
+        }, ms);
+    }
+
+    function showDeepReading() {
+        triggerLoader("惑星直列シミュレーション", "母性エネルギーと誕生時の星位を融合中...", 4000, () => {
+            document.getElementById('deep-reading-box').style.display = 'block';
+            document.querySelector('.btn-detail').style.display = 'none';
+            document.getElementById('screen-result').scrollTo({ top: 500, behavior: 'smooth' });
+        });
+    }
+
+    function buildReport(data) {
+        const bDate = new Date(data.birth);
+        const dayKey = (bDate.getMonth() + 1) * 100 + bDate.getDate();
+        const zodiac = ZODIAC_DATA.find(z => {
+            if(z.id === "Capricorn") return dayKey >= 1222 || dayKey <= 119;
+            return dayKey >= z.range[0] && dayKey <= z.range[1];
+        }) || ZODIAC_DATA[0];
+
+        // Advanced Logic: Name + Mother Name + Current Date Seed
+        const now = new Date();
+        const seed = data.name.length + data.mname.length + dayKey + now.getDate() + now.getMonth();
+        const luckyNums = Array.from({length: 6}, (_, i) => Math.abs(Math.floor(Math.sin(seed + i) * 43)) + 1);
+
+        document.getElementById('inject-result').innerHTML = `
+            <div class="z-hero">
+                <div class="z-symbol">${zodiac.icon}</div>
+                <h1>${zodiac.name}</h1>
+                <p style="opacity:0.5; font-size:0.8rem; margin-top:5px;">鑑定対象: ${data.name} 様</p>
+            </div>
+
+            <div class="main-card">
+                <h3><i class="fa-solid fa-compass"></i> 今日の天体概況</h3>
+                <p style="line-height:1.7; font-size:0.95rem; color:#ececec;">
+                    ${zodiac.name}の運気は、現在${now.getHours() > 12 ? '木星' : '金星'}の影響下にあります。
+                    あなたの誕生時の星位と現在のトランジットが調和し、特に人間関係において強い磁力が発生しています。
+                </p>
+                
+                <button class="btn-detail" onclick="showDeepReading()">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i> 詳細な霊的リーディングを表示
+                </button>
+
+                <div id="deep-reading-box">
+                    <h3 style="color:#fff;"><i class="fa-solid fa-dna"></i> 宿命と母性エネルギーの融合</h3>
+                    <p style="line-height:1.8; color:#d1d1d1; font-size:0.9rem;">
+                        母親である「<strong>${data.mname}</strong>」様のエネルギー解析の結果、あなたの運命の基盤には強い「直感力」が刻まれています。
+                        本日の星の動き（${now.toLocaleDateString('ja-JP')}）は、あなたが抱えている課題に対して、母性由来の知恵が解決の糸口になることを示唆しています。
+                    </p>
+
+                    <div class="stat-grid">
+                        <div class="stat-card"><small>魂のエネルギー</small><span>${Math.floor(82 + (seed%15))}%</span></div>
+                        <div class="stat-card"><small>本日の守護星</small><span>${seed % 2 === 0 ? '土星' : '太陽'}</span></div>
+                    </div>
+
+                    <div style="background:rgba(212,175,55,0.05); padding:15px; border-radius:15px; border:1px dashed var(--gold); margin-top:20px;">
+                        <small style="color:var(--gold); display:block; text-align:center; margin-bottom:12px; font-weight:bold;">本日のラッキーナンバー (1-43)</small>
+                        <div style="display:flex; justify-content:center; gap:10px;">
+                            ${luckyNums.map(n => `<div class="luck-ball">${n}</div>`).join('')}
+                        </div>
+                    </div>
+                    
+                    <p style="margin-top:20px; font-size:0.85rem; opacity:0.7; font-style:italic;">
+                        ※この鑑定は、${data.birth}の星位と姓名判断の波動を統合して算出されています。
+                    </p>
+                </div>
+            </div>
+
+            <div class="main-card" style="opacity:0.6;">
+                <h3><i class="fa-solid fa-quote-left"></i> 宇宙からの啓示</h3>
+                <p>「静寂の中に答えがあります。夕刻以降の決断が、あなたの今後一ヶ月を左右するでしょう。」</p>
+            </div>
+
+            <div class="reset-link" onclick="resetAll()">データを消去して再鑑定</div>
+        `;
+    }
+
+    function resetAll() {
+        localStorage.removeItem('astro_v4_jp');
+        location.reload();
+    }
+</script>
+
+</body>
+</html>
+
+```
+
