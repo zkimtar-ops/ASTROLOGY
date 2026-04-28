@@ -61,29 +61,6 @@ jobs:
           android.enableJetifier=true
           EOF
 
-      - name: Fix play-services version conflict
-        run: |
-          # رفع إصدار play-services-base من 11.0.4 إلى 18.x لإصلاح خطأ Invalid color
-          BUILD_GRADLE="platforms/android/app/build.gradle"
-          
-          echo "=== build.gradle قبل التعديل ==="
-          cat "$BUILD_GRADLE"
-
-          # إضافة force resolution لإصدار play-services محدث
-          cat >> "$BUILD_GRADLE" << 'EOF'
-
-          configurations.all {
-              resolutionStrategy {
-                  force 'com.google.android.gms:play-services-base:18.3.0'
-                  force 'com.google.android.gms:play-services-basement:18.3.0'
-                  force 'com.google.android.gms:play-services-tasks:18.1.0'
-              }
-          }
-          EOF
-
-          echo "=== build.gradle بعد التعديل ==="
-          cat "$BUILD_GRADLE"
-
       - name: Setup Gradle Wrapper
         run: |
           TOOLS_DIR="platforms/android/tools"
@@ -132,23 +109,66 @@ jobs:
             -Pandroid.injected.signing.store.password=123456 \
             -Pandroid.injected.signing.key.alias=astro_key \
             -Pandroid.injected.signing.key.password=123456 \
-            -x lint 2>&1
+            -x lint \
+            --info 2>&1 | grep -E "values.xml|Invalid|error:|FAILED|SUCCESS" | head -50
 
-          echo "=== بناء AAB ==="
+          echo "=== عرض values.xml المدمج ==="
+          find /home/runner/.gradle -name "values.xml" 2>/dev/null | head -5
+          find platforms/android/app/build -name "values.xml" 2>/dev/null | while read f; do
+            echo "--- $f ---"
+            cat "$f"
+            echo ""
+          done
+        continue-on-error: true
+
+      - name: Fix values.xml and Rebuild
+        run: |
+          GRADLEW="platforms/android/tools/gradlew"
+
+          # تشغيل mergeReleaseResources فقط لإنشاء الملف المدمج
+          "$GRADLEW" -p platforms/android :app:mergeReleaseResources \
+            -x lint 2>/dev/null || true
+
+          # البحث عن values.xml المدمج وإصلاحه
+          MERGED_VALUES="platforms/android/app/build/intermediates/incremental/release/mergeReleaseResources/merged.dir/values/values.xml"
+          
+          if [ -f "$MERGED_VALUES" ]; then
+            echo "=== values.xml المدمج ==="
+            cat "$MERGED_VALUES"
+            
+            # إزالة أي قيم لون غير صالحة
+            python3 << 'PYEOF'
+          import xml.etree.ElementTree as ET
+          import re
+
+          path = "platforms/android/app/build/intermediates/incremental/release/mergeReleaseResources/merged.dir/values/values.xml"
+          
+          with open(path, 'r', encoding='utf-8') as f:
+              content = f.read()
+          
+          print("Original content:")
+          print(content[:2000])
+          PYEOF
+          else
+            echo "الملف غير موجود بعد"
+          fi
+
+          # إعادة البناء الكاملة مع --info
+          "$GRADLEW" -p platforms/android :app:assembleRelease \
+            -Pandroid.injected.signing.store.file=${{ github.workspace }}/release.jks \
+            -Pandroid.injected.signing.store.password=123456 \
+            -Pandroid.injected.signing.key.alias=astro_key \
+            -Pandroid.injected.signing.key.password=123456 \
+            -x lint \
+            --info 2>&1 | tail -80
+
           "$GRADLEW" -p platforms/android :app:bundleRelease \
             -Pandroid.injected.signing.store.file=${{ github.workspace }}/release.jks \
             -Pandroid.injected.signing.store.password=123456 \
             -Pandroid.injected.signing.key.alias=astro_key \
             -Pandroid.injected.signing.key.password=123456 \
-            -x lint 2>&1
+            -x lint 2>&1 | tail -30
         continue-on-error: true
-
-      - name: Find All Output Files
-        run: |
-          echo "=== APK ==="
-          find platforms/android -name "*.apk" 2>/dev/null
-          echo "=== AAB ==="
-          find platforms/android -name "*.aab" 2>/dev/null
 
       - name: Copy Output Files
         run: |
@@ -157,7 +177,7 @@ jobs:
           APK=$(find platforms/android -name "*.apk" | head -1)
           if [ -n "$APK" ]; then
             cp "$APK" output/Astrology_Final.apk
-            echo "✅ APK موجود"
+            echo "✅ APK: $APK"
           else
             echo "⚠️ لا يوجد APK"
           fi
@@ -165,7 +185,7 @@ jobs:
           AAB=$(find platforms/android -name "*.aab" | head -1)
           if [ -n "$AAB" ]; then
             cp "$AAB" output/Astrology_Final.aab
-            echo "✅ AAB موجود"
+            echo "✅ AAB: $AAB"
           else
             echo "⚠️ لا يوجد AAB"
           fi
