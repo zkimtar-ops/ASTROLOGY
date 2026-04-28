@@ -1,4 +1,4 @@
-name: Astrology_Build_Final_Package
+name: Astrology_Final_Emergency_Build
 
 on:
   push:
@@ -25,37 +25,33 @@ jobs:
 
       - name: Build Android App
         run: |
-          # 1. تنظيف شامل
           npm install -g cordova --no-audit
           rm -rf node_modules package-lock.json platforms plugins
           
-          # 2. إضافة المنصة والإضافات
           cordova platform add android@13.0.0 --save
+          
+          # 1. تثبيت الإضافات (بدون وضع المتغير هنا لمنع التكرار اللعين)
           cordova plugin add cordova-plugin-androidx
           cordova plugin add cordova-plugin-androidx-adapter
+          cordova plugin add community-cordova-plugin-admob 
           
-          # ملاحظة: سنضيف الإضافة هنا بدون المتغير أولاً ثم نعدل الملف يدوياً لمنع التكرار
-          cordova plugin add community-cordova-plugin-admob --variable ADMOB_APP_ID="ca-app-pub-9756015724360400~1341007605"
-          
-          # 3. التحضير
           cordova prepare android
           
-          # 4. [حل مشكلة التكرار] حذف أي مدخلات مكررة لـ AdMob وإضافتها بشكل سليم مع أداة الدمج
+          # 2. جراحة المانيفست: حذف أي تكرار وإضافة المعرف يدوياً مرة واحدة فقط
+          # سنقوم بحذف أي سطر يحتوي على gms.ads.APPLICATION_ID تماماً
           sed -i '/com.google.android.gms.ads.APPLICATION_ID/d' platforms/android/app/src/main/AndroidManifest.xml || true
           
-          # إضافة السطر مع خاصية tools:replace لمنع تعارض الدمج
-          sed -i 's/<manifest /<manifest xmlns:tools="http:\/\/schemas.android.com\/tools" /' platforms/android/app/src/main/AndroidManifest.xml
-          sed -i '/<\/application>/i <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-9756015724360400~1341007605" tools:replace="android:value"\/>' platforms/android/app/src/main/AndroidManifest.xml
+          # 3. إضافة المعرف بشكل نظيف قبل نهاية الـ application
+          sed -i '/<\/application>/i <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-9756015724360400~1341007605"\/>' platforms/android/app/src/main/AndroidManifest.xml
 
-          # 5. [حل مشكلة الموارد] تعطيل التحقق الصارم من قيم XML المعطوبة في مكتبات جوجل
+          # 4. إعدادات قمع أخطاء الموارد (التي تسبب Resource compilation failed)
           echo "android.useAndroidX=true" >> platforms/android/gradle.properties
           echo "android.enableJetifier=true" >> platforms/android/gradle.properties
           echo "android.aapt2.no-optimize=true" >> platforms/android/gradle.properties
           
-          # 6. إنشاء مفتاح التوقيع
+          # 5. التوقيع
           keytool -genkey -v -keystore release.jks -alias astro_key -keyalg RSA -keysize 2048 -validity 10000 -storepass 123456 -keypass 123456 -dname "CN=Zakaria, O=AstrologyApp" -deststoretype pkcs12
 
-          # 7. ملف build.json
           cat <<EOF > build.json
           {
               "android": {
@@ -69,18 +65,16 @@ jobs:
           }
           EOF
 
-          # 8. البناء النهائي
+          # 6. البناء النهائي
           cordova build android --release --buildConfig=build.json -- --packageType=apk
           cordova build android --release --buildConfig=build.json -- --packageType=bundle
 
-          # 9. تجميع المخرجات
           mkdir -p output
-          cp platforms/android/app/build/outputs/apk/release/*.apk ./output/Astrology_V1.apk
-          cp platforms/android/app/build/outputs/bundle/release/*.aab ./output/Astrology_V1.aab
-          cp release.jks ./output/release_key.jks
+          cp platforms/android/app/build/outputs/apk/release/*.apk ./output/Astrology_Final.apk
+          cp platforms/android/app/build/outputs/bundle/release/*.aab ./output/Astrology_Final.aab
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Astrology-Full-Package
+          name: Astrology-Build
           path: output/
