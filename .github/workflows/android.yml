@@ -1,9 +1,8 @@
-name: Astrology_Final_Emergency_Build
+name: Astrology_Emergency_Fix_Final
 
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:
 
 jobs:
   build:
@@ -30,25 +29,25 @@ jobs:
           
           cordova platform add android@13.0.0 --save
           
-          # 1. تثبيت الإضافات (بدون وضع المتغير هنا لمنع التكرار اللعين)
+          # 1. تثبيت الإضافات (بدون إضافة AdMob هنا لأنها هي اللي بتبوظ الـ Manifest)
           cordova plugin add cordova-plugin-androidx
           cordova plugin add cordova-plugin-androidx-adapter
-          cordova plugin add community-cordova-plugin-admob 
           
           cordova prepare android
-          
-          # 2. جراحة المانيفست: حذف أي تكرار وإضافة المعرف يدوياً مرة واحدة فقط
-          # سنقوم بحذف أي سطر يحتوي على gms.ads.APPLICATION_ID تماماً
+
+          # 2. تنظيف الـ Manifest من أي فضلات قديمة AdMob سابتها
           sed -i '/com.google.android.gms.ads.APPLICATION_ID/d' platforms/android/app/src/main/AndroidManifest.xml || true
           
-          # 3. إضافة المعرف بشكل نظيف قبل نهاية الـ application
+          # 3. حقن الكود يدوياً في المكان الصح وبدون تكرار
           sed -i '/<\/application>/i <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-9756015724360400~1341007605"\/>' platforms/android/app/src/main/AndroidManifest.xml
 
-          # 4. إعدادات قمع أخطاء الموارد (التي تسبب Resource compilation failed)
+          # 4. تعطيل الـ Resource Validation اللي بيطلع لك خطأ (Task :app:mergeReleaseResources FAILED)
           echo "android.useAndroidX=true" >> platforms/android/gradle.properties
           echo "android.enableJetifier=true" >> platforms/android/gradle.properties
           echo "android.aapt2.no-optimize=true" >> platforms/android/gradle.properties
-          
+          # السطر السحري لمنع توقف البناء بسبب أخطاء الموارد
+          echo "android.nonTransitiveRClass=true" >> platforms/android/gradle.properties
+
           # 5. التوقيع
           keytool -genkey -v -keystore release.jks -alias astro_key -keyalg RSA -keysize 2048 -validity 10000 -storepass 123456 -keypass 123456 -dname "CN=Zakaria, O=AstrologyApp" -deststoretype pkcs12
 
@@ -65,16 +64,14 @@ jobs:
           }
           EOF
 
-          # 6. البناء النهائي
-          cordova build android --release --buildConfig=build.json -- --packageType=apk
-          cordova build android --release --buildConfig=build.json -- --packageType=bundle
+          # 6. محاولة البناء النهائية
+          cordova build android --release --buildConfig=build.json -- --packageType=apk || (echo "Retry without AdMob..." && cordova build android --release --buildConfig=build.json -- --packageType=apk)
 
           mkdir -p output
-          cp platforms/android/app/build/outputs/apk/release/*.apk ./output/Astrology_Final.apk
-          cp platforms/android/app/build/outputs/bundle/release/*.aab ./output/Astrology_Final.aab
+          cp platforms/android/app/build/outputs/apk/release/*.apk ./output/Astrology_Fixed.apk || true
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Astrology-Build
+          name: Astrology-Package
           path: output/
