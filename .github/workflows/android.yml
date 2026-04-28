@@ -61,6 +61,27 @@ jobs:
           android.enableJetifier=true
           EOF
 
+      - name: Force upgrade play-services in build.gradle
+        run: |
+          # إضافة إصدار جديد لـ play-services في dependencies
+          cat >> platforms/android/app/build.gradle << 'EOF'
+
+          configurations.all {
+              resolutionStrategy.eachDependency { DependencyResolveDetails details ->
+                  if (details.requested.group == 'com.google.android.gms') {
+                      if (details.requested.name == 'play-services-base') {
+                          details.useVersion '18.3.0'
+                          details.because 'Fix Invalid color in old version'
+                      }
+                      if (details.requested.name == 'play-services-basement') {
+                          details.useVersion '18.3.0'
+                          details.because 'Fix Invalid color in old version'
+                      }
+                  }
+              }
+          }
+          EOF
+
       - name: Setup Gradle Wrapper
         run: |
           TOOLS_DIR="platforms/android/tools"
@@ -99,6 +120,53 @@ jobs:
             -dname "CN=Zakaria" \
             -deststoretype pkcs12
 
+      - name: Fix play-services-base-11.0.4 bad values.xml
+        run: |
+          GRADLEW="platforms/android/tools/gradlew"
+
+          # تشغيل أول مرة لتحميل الـ dependencies
+          "$GRADLEW" -p platforms/android :app:mergeReleaseResources \
+            -x lint 2>/dev/null || true
+
+          # البحث عن الملف المشكل وإصلاحه
+          BAD_FILE=$(find /home/runner/.gradle/caches/transforms-4 \
+            -path "*/jetified-play-services-base-11.0.4/res/values/values.xml" \
+            2>/dev/null | head -1)
+
+          if [ -n "$BAD_FILE" ]; then
+            echo "✅ وجدنا الملف المشكل: $BAD_FILE"
+            echo "=== المحتوى قبل الإصلاح ==="
+            cat "$BAD_FILE"
+            
+            # إصلاح قيم اللون غير الصالحة باستخدام Python
+            python3 << PYEOF
+          import re
+
+          path = "$BAD_FILE"
+          with open(path, 'r', encoding='utf-8') as f:
+              content = f.read()
+
+          print("Before fix:")
+          print(content)
+
+          # إصلاح قيم اللون غير الصالحة
+          fixed = re.sub(
+              r'<color name="[^"]*">[^<]*</color>',
+              lambda m: m.group(0) if re.search(r'#[0-9A-Fa-f]{3,8}', m.group(0)) else '',
+              content
+          )
+
+          with open(path, 'w', encoding='utf-8') as f:
+              f.write(fixed)
+
+          print("After fix:")
+          print(fixed)
+          PYEOF
+          else
+            echo "⚠️ الملف غير موجود في cache بعد"
+            find /home/runner/.gradle/caches/transforms-4 -name "values.xml" 2>/dev/null | head -10
+          fi
+
       - name: Build APK and AAB
         run: |
           GRADLEW="platforms/android/tools/gradlew"
@@ -109,65 +177,15 @@ jobs:
             -Pandroid.injected.signing.store.password=123456 \
             -Pandroid.injected.signing.key.alias=astro_key \
             -Pandroid.injected.signing.key.password=123456 \
-            -x lint \
-            --info 2>&1 | grep -E "values.xml|Invalid|error:|FAILED|SUCCESS" | head -50
+            -x lint 2>&1
 
-          echo "=== عرض values.xml المدمج ==="
-          find /home/runner/.gradle -name "values.xml" 2>/dev/null | head -5
-          find platforms/android/app/build -name "values.xml" 2>/dev/null | while read f; do
-            echo "--- $f ---"
-            cat "$f"
-            echo ""
-          done
-        continue-on-error: true
-
-      - name: Fix values.xml and Rebuild
-        run: |
-          GRADLEW="platforms/android/tools/gradlew"
-
-          # تشغيل mergeReleaseResources فقط لإنشاء الملف المدمج
-          "$GRADLEW" -p platforms/android :app:mergeReleaseResources \
-            -x lint 2>/dev/null || true
-
-          # البحث عن values.xml المدمج وإصلاحه
-          MERGED_VALUES="platforms/android/app/build/intermediates/incremental/release/mergeReleaseResources/merged.dir/values/values.xml"
-          
-          if [ -f "$MERGED_VALUES" ]; then
-            echo "=== values.xml المدمج ==="
-            cat "$MERGED_VALUES"
-            
-            # إزالة أي قيم لون غير صالحة
-            python3 << 'PYEOF'
-          import xml.etree.ElementTree as ET
-          import re
-
-          path = "platforms/android/app/build/intermediates/incremental/release/mergeReleaseResources/merged.dir/values/values.xml"
-          
-          with open(path, 'r', encoding='utf-8') as f:
-              content = f.read()
-          
-          print("Original content:")
-          print(content[:2000])
-          PYEOF
-          else
-            echo "الملف غير موجود بعد"
-          fi
-
-          # إعادة البناء الكاملة مع --info
-          "$GRADLEW" -p platforms/android :app:assembleRelease \
-            -Pandroid.injected.signing.store.file=${{ github.workspace }}/release.jks \
-            -Pandroid.injected.signing.store.password=123456 \
-            -Pandroid.injected.signing.key.alias=astro_key \
-            -Pandroid.injected.signing.key.password=123456 \
-            -x lint \
-            --info 2>&1 | tail -80
-
+          echo "=== بناء AAB ==="
           "$GRADLEW" -p platforms/android :app:bundleRelease \
             -Pandroid.injected.signing.store.file=${{ github.workspace }}/release.jks \
             -Pandroid.injected.signing.store.password=123456 \
             -Pandroid.injected.signing.key.alias=astro_key \
             -Pandroid.injected.signing.key.password=123456 \
-            -x lint 2>&1 | tail -30
+            -x lint 2>&1
         continue-on-error: true
 
       - name: Copy Output Files
@@ -177,7 +195,7 @@ jobs:
           APK=$(find platforms/android -name "*.apk" | head -1)
           if [ -n "$APK" ]; then
             cp "$APK" output/Astrology_Final.apk
-            echo "✅ APK: $APK"
+            echo "✅ APK موجود"
           else
             echo "⚠️ لا يوجد APK"
           fi
@@ -185,7 +203,7 @@ jobs:
           AAB=$(find platforms/android -name "*.aab" | head -1)
           if [ -n "$AAB" ]; then
             cp "$AAB" output/Astrology_Final.aab
-            echo "✅ AAB: $AAB"
+            echo "✅ AAB موجود"
           else
             echo "⚠️ لا يوجد AAB"
           fi
