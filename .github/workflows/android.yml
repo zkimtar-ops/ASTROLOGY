@@ -116,4 +116,13 @@ jobs:
             -x lint \
             --stacktrace
 
-      -
+      - name: Copy APK
+        run: |
+          mkdir -p output
+          cp platforms/android/app/build/outputs/apk/release/*.apk output/Astrology_Final.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: APK_READY
+          path: output/
