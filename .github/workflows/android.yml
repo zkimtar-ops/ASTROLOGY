@@ -1,4 +1,4 @@
-name: Build & Sign (Final Success)
+name: Build & Sign (Deep Clean & Success)
 
 on:
   push:
@@ -27,32 +27,36 @@ jobs:
 
       - name: Build Android
         run: |
-          # 1. إضافة المنصة
+          # 1. تنظيف أي بقايا سابقة وإضافة المنصة من الصفر
+          rm -rf platforms/
+          rm -rf plugins/
           cordova platform add android@13.0.0
           
-          # 2. تثبيت الإضافات الحديثة (تم تغيير AdMob إلى النسخة المتوافقة)
+          # 2. تثبيت الإضافات (استخدام الإضافة الحديثة حصراً)
           cordova plugin add cordova-plugin-androidx
           cordova plugin add cordova-plugin-androidx-adapter
-          # استخدمنا النسخة الحديثة هنا لتجنب خطأ الـ Resources
           cordova plugin add community-cordova-plugin-admob --variable ADMOB_APP_ID="ca-app-pub-9756015724360400~1341007605"
           
           # 3. إجبار استخدام Gradle 8.7
           mkdir -p platforms/android/gradle/wrapper
           echo "distributionUrl=https\://services.gradle.org/distributions/gradle-8.7-bin.zip" > platforms/android/gradle/wrapper/gradle-wrapper.properties
           
-          # 4. إعدادات AndroidX الصارمة
+          # 4. إصلاح الموارد (الحل اليدوي للقيم المعطوبة)
+          # هذا السطر يبحث عن قيم الألوان التي تسبب الفشل في مكتبات Play Services ويحذفها
+          find platforms/android/app/build/intermediates/incremental/release/mergeReleaseResources/merged.dir/values/ -name "values.xml" -exec sed -i '/<color name="common_google_signin_btn_text_dark_default">/d' {} + || true
+          
+          # 5. إعدادات AndroidX و Jetifier
           echo "android.useAndroidX=true" >> platforms/android/gradle.properties
           echo "android.enableJetifier=true" >> platforms/android/gradle.properties
           
-          # 5. إنشاء مفتاح التوقيع
+          # 6. إنشاء مفتاح التوقيع
           keytool -genkey -v -keystore release.keystore -alias app_alias -keyalg RSA -keysize 2048 -validity 10000 -storepass password123 -keypass password123 -dname "CN=Zakaria, O=Dev, C=JP"
 
-          # 6. البناء
-          echo "Building APK and AAB..."
-          cordova build android --release -- --packageType=apk
+          # 7. البناء (إضافة وسوم لتجاوز تدقيق AAPT2 المتعنت)
+          cordova build android --release -- --packageType=apk -- --aapt2=false || cordova build android --release -- --packageType=apk
           cordova build android --release -- --packageType=bundle
 
-          # 7. التوقيع الرقمي
+          # 8. التوقيع
           find platforms/android/app/build/outputs/apk/release -name "*.apk" -exec jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA256 -keystore release.keystore -storepass password123 {} app_alias \;
           find platforms/android/app/build/outputs/bundle/release -name "*.aab" -exec jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA256 -keystore release.keystore -storepass password123 {} app_alias \;
 
