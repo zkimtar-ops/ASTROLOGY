@@ -1,4 +1,4 @@
-name: Build & Sign (Stability Mode)
+name: Build & Sign (Final Fix 2026)
 
 on:
   push:
@@ -14,46 +14,51 @@ jobs:
       - name: Setup Java JDK
         uses: actions/setup-java@v4
         with:
-          java-version: '11' # العودة لـ 11 لتناسب المنصة المستقرة
+          java-version: '17' # تحديث إجباري لإرضاء Gradle 9
           distribution: 'temurin'
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
 
       - name: Install Cordova
         run: npm install -g cordova
 
-      - name: Final Build Attempt
+      - name: Build Process
         run: |
-          # 1. تنظيف شامل للمجلدات
-          rm -rf platforms/ plugins/ node_modules/
+          # 1. تنظيف أي محاولات سابقة
+          rm -rf platforms/ plugins/
           
-          # 2. استخدام أندرويد 10 (هذا الإصدار يتجاوز أخطاء AAPT2 اللعينة)
-          cordova platform add android@10.1.2
+          # 2. إضافة المنصة (الإصدار 13 متوافق تماماً مع Java 17)
+          cordova platform add android@13.0.0
           
-          # 3. تثبيت الإضافات
+          # 3. تثبيت الإضافات الأساسية فقط
           cordova plugin add cordova-plugin-androidx
           cordova plugin add cordova-plugin-androidx-adapter
-          cordova plugin add cordova-plugin-admob-free --variable ADMOB_APP_ID="ca-app-pub-9756015724360400~1341007605"
+          cordova plugin add community-cordova-plugin-admob --variable ADMOB_APP_ID="ca-app-pub-9756015724360400~1341007605"
           
-          # 4. إنشاء مفتاح التوقيع
+          # 4. إعدادات توافق AndroidX
+          cat <<EOF > platforms/android/gradle.properties
+          android.useAndroidX=true
+          android.enableJetifier=true
+          EOF
+
+          # 5. إنشاء مفتاح التوقيع
           keytool -genkey -v -keystore release.keystore -alias app_alias -keyalg RSA -keysize 2048 -validity 10000 -storepass password123 -keypass password123 -dname "CN=Zakaria, O=Dev, C=JP"
 
-          # 5. بناء APK و AAB
-          # في هذا الإصدار، البناء أسرع وأقل تعقيداً في الموارد
+          # 6. بناء APK و AAB
           cordova build android --release -- --packageType=apk
           cordova build android --release -- --packageType=bundle
 
-          # 6. التوقيع الرقمي
+          # 7. التوقيع الرقمي
           find platforms/android/app/build/outputs -name "*.apk" -exec jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA256 -keystore release.keystore -storepass password123 {} app_alias \;
           find platforms/android/app/build/outputs -name "*.aab" -exec jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA256 -keystore release.keystore -storepass password123 {} app_alias \;
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: App-Packages
+          name: Final-App-Packages
           path: |
             platforms/android/app/build/outputs/apk/release/*.apk
             platforms/android/app/build/outputs/bundle/release/*.aab
