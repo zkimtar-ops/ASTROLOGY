@@ -20,7 +20,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
 
       - name: Install Cordova
         run: npm install -g cordova --no-audit
@@ -74,24 +74,11 @@ jobs:
           cordova plugin add cordova-plugin-androidx-adapter
           cordova prepare android
 
-      - name: Fix values.xml conflict
-        run: |
-          # عرض محتوى values.xml للتشخيص
-          find platforms/android -name "values.xml" | head -5
-          
-          # إصلاح تعارض الموارد - دمج ملفات values المتعارضة
-          VALUES_FILE="platforms/android/app/src/main/res/values/values.xml"
-          if [ -f "$VALUES_FILE" ]; then
-            echo "Found values.xml:"
-            cat "$VALUES_FILE"
-          fi
-
       - name: Configure Gradle Properties
         run: |
           cat >> platforms/android/gradle.properties << 'EOF'
           android.useAndroidX=true
           android.enableJetifier=true
-          # تعطيل AAPT2 واستخدام AAPT القديم لتجنب خطأ values.xml
           android.enableAapt2=false
           EOF
 
@@ -101,3 +88,45 @@ jobs:
             -keystore release.jks \
             -alias astro_key \
             -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -storepass 123456 \
+            -keypass 123456 \
+            -dname "CN=Zakaria" \
+            -deststoretype pkcs12
+
+      - name: Build Release APK
+        run: |
+          cd platforms/android/tools
+          ./gradlew -p .. assembleRelease \
+            -Pandroid.injected.signing.store.file=${{ github.workspace }}/release.jks \
+            -Pandroid.injected.signing.store.password=123456 \
+            -Pandroid.injected.signing.key.alias=astro_key \
+            -Pandroid.injected.signing.key.password=123456 \
+            -x lint \
+            --continue \
+            --stacktrace 2>&1 | tail -50
+
+      - name: Find and Copy APK
+        run: |
+          echo "=== البحث عن كل ملفات APK ==="
+          find platforms/android -name "*.apk" 2>/dev/null
+
+          mkdir -p output
+
+          APK=$(find platforms/android -name "*.apk" | head -1)
+
+          if [ -n "$APK" ]; then
+            cp "$APK" output/Astrology_Final.apk
+            echo "✅ تم نسخ: $APK"
+          else
+            echo "❌ لم يُوجد APK!"
+            exit 1
+          fi
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: APK_READY
+          path: output/
+          if-no-files-found: error
