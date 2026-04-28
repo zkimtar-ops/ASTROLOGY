@@ -95,32 +95,66 @@ jobs:
             -dname "CN=Zakaria" \
             -deststoretype pkcs12
 
-      - name: Build Release APK
+      - name: Build Release APK and AAB
         run: |
           cd platforms/android/tools
+          
+          # بناء APK
           ./gradlew -p .. assembleRelease \
             -Pandroid.injected.signing.store.file=${{ github.workspace }}/release.jks \
             -Pandroid.injected.signing.store.password=123456 \
             -Pandroid.injected.signing.key.alias=astro_key \
             -Pandroid.injected.signing.key.password=123456 \
             -x lint \
-            --continue \
-            --stacktrace 2>&1 | tail -50
+            --stacktrace 2>&1
+          
+          # بناء AAB
+          ./gradlew -p .. bundleRelease \
+            -Pandroid.injected.signing.store.file=${{ github.workspace }}/release.jks \
+            -Pandroid.injected.signing.store.password=123456 \
+            -Pandroid.injected.signing.key.alias=astro_key \
+            -Pandroid.injected.signing.key.password=123456 \
+            -x lint \
+            --stacktrace 2>&1
+        continue-on-error: true
 
-      - name: Find and Copy APK
+      - name: Diagnose Build Output
         run: |
-          echo "=== البحث عن كل ملفات APK ==="
+          echo "=== APK Files ==="
           find platforms/android -name "*.apk" 2>/dev/null
+          echo "=== AAB Files ==="
+          find platforms/android -name "*.aab" 2>/dev/null
+          echo "=== Build Outputs ==="
+          find platforms/android/app/build/outputs -type f 2>/dev/null || echo "No outputs folder"
+          echo "=== Build Folder ==="
+          ls platforms/android/app/build/ 2>/dev/null || echo "No build folder"
 
+      - name: Copy Output Files
+        run: |
           mkdir -p output
 
+          # نسخ APK
           APK=$(find platforms/android -name "*.apk" | head -1)
-
           if [ -n "$APK" ]; then
             cp "$APK" output/Astrology_Final.apk
-            echo "✅ تم نسخ: $APK"
+            echo "✅ APK: $APK"
           else
-            echo "❌ لم يُوجد APK!"
+            echo "⚠️ لم يُوجد APK"
+          fi
+
+          # نسخ AAB
+          AAB=$(find platforms/android -name "*.aab" | head -1)
+          if [ -n "$AAB" ]; then
+            cp "$AAB" output/Astrology_Final.aab
+            echo "✅ AAB: $AAB"
+          else
+            echo "⚠️ لم يُوجد AAB"
+          fi
+
+          # التحقق من وجود ملف واحد على الأقل
+          ls -la output/
+          if [ -z "$(ls -A output/)" ]; then
+            echo "❌ لا يوجد أي ملف ناتج!"
             exit 1
           fi
 
@@ -128,5 +162,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: APK_READY
-          path: output/
-          if-no-files-found: error
+          path: output/Astrology_Final.apk
+          if-no-files-found: warn
+
+      - name: Upload AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: AAB_READY
+          path: output/Astrology_Final.aab
+          if-no-files-found: warn
