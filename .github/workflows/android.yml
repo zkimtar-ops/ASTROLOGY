@@ -1,4 +1,4 @@
-name: Build & Auto-Sign (APK & AAB)
+name: Build & Sign (Direct Mode)
 
 on:
   push:
@@ -25,37 +25,26 @@ jobs:
       - name: Install Cordova
         run: npm install -g cordova
 
-      - name: Build Process
+      - name: Build Android
         run: |
-          # 1. إنشاء المشروع
-          cordova create build_dir com.zakaria.hoshinomichibiki "星の導き"
-          
-          # 2. نسخ الملفات الأساسية
-          cp config.xml build_dir/
-          if [ -d "www" ]; then cp -r www/* build_dir/www/; fi
-          
-          cd build_dir
-          
-          # 3. إضافة منصة أندرويد
+          # 1. إضافة منصة أندرويد للمجلد الحالي مباشرة
           cordova platform add android@13.0.0
           
-          # 4. تثبيت إضافة AdMob (تم حذف whitelist لأنها مدمجة في Android 13)
+          # 2. تثبيت الإضافة (تجاهل أي أخطاء في الـ whitelist فهي مدمجة أصلاً)
           cordova plugin add cordova-plugin-admob-free --variable ADMOB_APP_ID="ca-app-pub-9756015724360400~1341007605"
           
-          # 5. تعديل إصدار Gradle لمنع تعارض XmlParser مع Gradle 9
-          # قمنا بإضافة mkdir للتأكد من وجود المسار
+          # 3. إجبار النظام على استخدام Gradle 8.7 لتجنب خطأ XmlParser
           mkdir -p platforms/android/gradle/wrapper
           echo "distributionUrl=https\://services.gradle.org/distributions/gradle-8.7-bin.zip" > platforms/android/gradle/wrapper/gradle-wrapper.properties
           
-          # 6. إنشاء مفتاح التوقيع التلقائي
+          # 4. إنشاء مفتاح التوقيع في المجلد الرئيسي
           keytool -genkey -v -keystore release.keystore -alias app_alias -keyalg RSA -keysize 2048 -validity 10000 -storepass password123 -keypass password123 -dname "CN=Zakaria, O=Dev, C=JP"
 
-          # 7. بناء الملفات
-          echo "Building APK and AAB..."
+          # 5. بناء APK و AAB
           cordova build android --release -- --packageType=apk
           cordova build android --release -- --packageType=bundle
 
-          # 8. التوقيع الرقمي للملفات الناتجة
+          # 6. التوقيع الرقمي
           find platforms/android/app/build/outputs/apk/release -name "*.apk" -exec jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA256 -keystore release.keystore -storepass password123 {} app_alias \;
           find platforms/android/app/build/outputs/bundle/release -name "*.aab" -exec jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA256 -keystore release.keystore -storepass password123 {} app_alias \;
 
@@ -64,5 +53,5 @@ jobs:
         with:
           name: App-Packages
           path: |
-            build_dir/platforms/android/app/build/outputs/apk/release/*.apk
-            build_dir/platforms/android/app/build/outputs/bundle/release/*.aab
+            platforms/android/app/build/outputs/apk/release/*.apk
+            platforms/android/app/build/outputs/bundle/release/*.aab
