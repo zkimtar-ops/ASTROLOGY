@@ -2,50 +2,39 @@ name: Build Android APK
 
 on:
   push:
-    branches: [ main ] # سيعمل البناء عند رفع الكود لفرع main
+    branches: [ main ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4 # تحديث لـ v4
 
       - name: Setup Java JDK
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v4 # تحديث لـ v4
         with:
-          java-version: '11'
+          java-version: '17' # استخدام إصدار أحدث متوافق مع Gradle الجديد
           distribution: 'temurin'
 
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4 # تحديث لـ v4
         with:
-          node-version: '16'
+          node-version: '20'
 
       - name: Install Cordova
         run: npm install -g cordova
 
       - name: Create Project and Build APK
         run: |
-          # إنشاء مجلد البناء المؤقت
           cordova create build_dir com.zakaria.hoshinomichibiki "星の導き"
-          
-          # نسخ ملف الإعدادات الخاص بك إلى المجلد
           cp config.xml build_dir/
-          
           cd build_dir
-          
-          # إضافة منصة أندرويد
           cordova platform add android
-          
-          # تثبيت إضافة الإعلانات مع معرف التطبيق الخاص بك
+          # ملاحظة: تأكد من صحة معرف التطبيق أدناه
           cordova plugin add cordova-plugin-admob-free --variable ADMOB_APP_ID="ca-app-pub-9756015724360400~1341007605"
-          
-          # نسخ ملفات الـ HTML والـ JS والـ CSS (مجلد www)
           rm -rf www/*
           cp -r ../www/* www/
-          
-          # بناء التطبيق (نسخة Release غير موقعة)
           cordova build android --release
 
       - name: Upload APK Artifact
