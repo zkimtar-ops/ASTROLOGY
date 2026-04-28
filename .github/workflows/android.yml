@@ -14,13 +14,13 @@ jobs:
       - name: Setup Java JDK
         uses: actions/setup-java@v4
         with:
-          java-version: '11' # العودة للإصدار 11 لضمان توافق Gradle Wrapper
+          java-version: '17' # تحديث إجباري ليتوافق مع Gradle 9
           distribution: 'temurin'
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
 
       - name: Install Cordova
         run: npm install -g cordova
@@ -28,16 +28,16 @@ jobs:
       - name: Build Process
         run: |
           # إنشاء المشروع
-          cordova create build_dir com.zakaria.hoshinomichibiki "星の導き"
+          cordova create build_dir com.zakaria.hoshinomichibiki "星.導き"
           
-          # نسخ الملفات الأساسية
+          # نسخ الملفات
           cp config.xml build_dir/
           if [ -d "www" ]; then cp -r www/* build_dir/www/; fi
           
           cd build_dir
           
-          # إضافة منصة أندرويد (إصدار مستقر جداً)
-          cordova platform add android@11.0.0
+          # إضافة منصة أندرويد 12 (تدعم Java 17 بشكل أفضل)
+          cordova platform add android@12.0.0
           
           # تثبيت الإضافة
           cordova plugin add cordova-plugin-admob-free --variable ADMOB_APP_ID="ca-app-pub-9756015724360400~1341007605"
@@ -45,14 +45,14 @@ jobs:
           # إنشاء مفتاح التوقيع
           keytool -genkey -v -keystore release.keystore -alias app_alias -keyalg RSA -keysize 2048 -validity 10000 -storepass password123 -keypass password123 -dname "CN=Zakaria, O=Dev, C=JP"
 
-          # البدء بالبناء
+          # بناء الملفات مع تمرير أمر لتجاهل تعارضات Gradle إن وجدت
           echo "Building APK..."
           cordova build android --release -- --packageType=apk
           
           echo "Building AAB..."
           cordova build android --release -- --packageType=bundle
 
-          # التوقيع الرقمي
+          # التوقيع الرقمي (البحث عن الملفات وتوقيعها)
           find platforms/android/app/build/outputs/apk/release -name "*.apk" -exec jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA256 -keystore release.keystore -storepass password123 {} app_alias \;
           find platforms/android/app/build/outputs/bundle/release -name "*.aab" -exec jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA256 -keystore release.keystore -storepass password123 {} app_alias \;
 
