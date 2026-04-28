@@ -43,11 +43,15 @@ jobs:
       - name: Add Android Platform
         run: cordova platform add android@13.0.0
 
-      - name: Generate Gradle Wrapper
+      - name: Generate Gradle Wrapper 8.7
         run: |
           cd platforms/android
-          gradle wrapper --gradle-version=8.7
+          # تحميل Gradle 8.7 يدوياً
+          wget -q https://services.gradle.org/distributions/gradle-8.7-bin.zip -O /tmp/gradle-8.7.zip
+          unzip -q /tmp/gradle-8.7.zip -d /tmp/
+          /tmp/gradle-8.7/bin/gradle wrapper --gradle-version=8.7
           chmod +x gradlew
+          echo "✅ gradlew created:"
           ls -la gradlew
 
       - name: Add Plugins
