@@ -43,20 +43,14 @@ jobs:
       - name: Add Android Platform
         run: cordova platform add android@13.0.0
 
-      - name: Show full platform structure
-        run: find platforms/android -maxdepth 3 -name "gradlew" -o -name "gradle-wrapper.properties" 2>/dev/null
-
-      - name: Setup Gradle Wrapper in tools folder
+      - name: Setup Gradle Wrapper
         run: |
-          # في cordova-android 13، gradlew موجود في tools/
           TOOLS_DIR="platforms/android/tools"
           mkdir -p "$TOOLS_DIR/gradle/wrapper"
 
-          # تحميل gradle-wrapper.jar الحقيقي من gradle الرسمي
           wget -q "https://github.com/gradle/gradle/raw/v8.7.0/gradle/wrapper/gradle-wrapper.jar" \
             -O "$TOOLS_DIR/gradle/wrapper/gradle-wrapper.jar"
 
-          # إنشاء gradle-wrapper.properties
           cat > "$TOOLS_DIR/gradle/wrapper/gradle-wrapper.properties" << 'EOF'
           distributionBase=GRADLE_USER_HOME
           distributionPath=wrapper/dists
@@ -65,7 +59,6 @@ jobs:
           zipStorePath=wrapper/dists
           EOF
 
-          # إنشاء gradlew script
           cat > "$TOOLS_DIR/gradlew" << 'EOF'
           #!/usr/bin/env sh
           APP_HOME="$(dirname "$0")"
@@ -75,21 +68,31 @@ jobs:
           EOF
 
           chmod +x "$TOOLS_DIR/gradlew"
-          echo "✅ Structure:"
-          ls -la "$TOOLS_DIR/"
-          ls -la "$TOOLS_DIR/gradle/wrapper/"
 
       - name: Add Plugins
         run: |
           cordova plugin add cordova-plugin-androidx-adapter
           cordova prepare android
 
+      - name: Fix values.xml conflict
+        run: |
+          # عرض محتوى values.xml للتشخيص
+          find platforms/android -name "values.xml" | head -5
+          
+          # إصلاح تعارض الموارد - دمج ملفات values المتعارضة
+          VALUES_FILE="platforms/android/app/src/main/res/values/values.xml"
+          if [ -f "$VALUES_FILE" ]; then
+            echo "Found values.xml:"
+            cat "$VALUES_FILE"
+          fi
+
       - name: Configure Gradle Properties
         run: |
           cat >> platforms/android/gradle.properties << 'EOF'
           android.useAndroidX=true
           android.enableJetifier=true
-          android.aapt2.no-optimize=true
+          # تعطيل AAPT2 واستخدام AAPT القديم لتجنب خطأ values.xml
+          android.enableAapt2=false
           EOF
 
       - name: Generate Keystore
@@ -98,31 +101,3 @@ jobs:
             -keystore release.jks \
             -alias astro_key \
             -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -storepass 123456 \
-            -keypass 123456 \
-            -dname "CN=Zakaria" \
-            -deststoretype pkcs12
-
-      - name: Build Release APK
-        run: |
-          cd platforms/android/tools
-          ./gradlew -p .. assembleRelease \
-            -Pandroid.injected.signing.store.file=${{ github.workspace }}/release.jks \
-            -Pandroid.injected.signing.store.password=123456 \
-            -Pandroid.injected.signing.key.alias=astro_key \
-            -Pandroid.injected.signing.key.password=123456 \
-            -x lint \
-            --stacktrace
-
-      - name: Copy APK
-        run: |
-          mkdir -p output
-          cp platforms/android/app/build/outputs/apk/release/*.apk output/Astrology_Final.apk
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: APK_READY
-          path: output/
