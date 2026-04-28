@@ -32,8 +32,6 @@ jobs:
               "name": "hoshinomichibiki",
               "version": "1.0.0",
               "description": "Astrology App",
-              "main": "index.js",
-              "scripts": {},
               "author": "Zakaria",
               "license": "ISC"
             }' > package.json
@@ -45,10 +43,12 @@ jobs:
       - name: Add Android Platform
         run: cordova platform add android@13.0.0
 
-      - name: Verify gradlew exists
+      - name: Generate Gradle Wrapper
         run: |
-          ls -la platforms/android/
-          test -f platforms/android/gradlew || (echo "gradlew not found!" && exit 1)
+          cd platforms/android
+          gradle wrapper --gradle-version=8.7
+          chmod +x gradlew
+          ls -la gradlew
 
       - name: Add Plugins
         run: |
@@ -79,7 +79,6 @@ jobs:
       - name: Build Release APK
         run: |
           cd platforms/android
-          chmod +x gradlew
           ./gradlew assembleRelease \
             -Pandroid.injected.signing.store.file=${{ github.workspace }}/release.jks \
             -Pandroid.injected.signing.store.password=123456 \
