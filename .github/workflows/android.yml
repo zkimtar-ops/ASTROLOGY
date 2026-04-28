@@ -1,4 +1,4 @@
-name: Build & Sign (Direct Mode)
+name: Build & Sign (Fix Resources)
 
 on:
   push:
@@ -27,24 +27,29 @@ jobs:
 
       - name: Build Android
         run: |
-          # 1. إضافة منصة أندرويد للمجلد الحالي مباشرة
+          # 1. إضافة المنصة
           cordova platform add android@13.0.0
           
-          # 2. تثبيت الإضافة (تجاهل أي أخطاء في الـ whitelist فهي مدمجة أصلاً)
+          # 2. تثبيت الإضافات
           cordova plugin add cordova-plugin-admob-free --variable ADMOB_APP_ID="ca-app-pub-9756015724360400~1341007605"
           
-          # 3. إجبار النظام على استخدام Gradle 8.7 لتجنب خطأ XmlParser
+          # 3. إجبار استخدام Gradle 8.7
           mkdir -p platforms/android/gradle/wrapper
           echo "distributionUrl=https\://services.gradle.org/distributions/gradle-8.7-bin.zip" > platforms/android/gradle/wrapper/gradle-wrapper.properties
           
-          # 4. إنشاء مفتاح التوقيع في المجلد الرئيسي
+          # 4. إصلاح تعارض المكتبات (Jetifier + AndroidX)
+          # هذا السطر يحل مشكلة Invalid <color> عبر تحديث المكتبات القديمة
+          echo "android.useAndroidX=true" >> platforms/android/gradle.properties
+          echo "android.enableJetifier=true" >> platforms/android/gradle.properties
+          
+          # 5. إنشاء مفتاح التوقيع
           keytool -genkey -v -keystore release.keystore -alias app_alias -keyalg RSA -keysize 2048 -validity 10000 -storepass password123 -keypass password123 -dname "CN=Zakaria, O=Dev, C=JP"
 
-          # 5. بناء APK و AAB
+          # 6. البناء (إضافة وسوم لتجاوز أخطاء الذاكرة والموارد)
           cordova build android --release -- --packageType=apk
           cordova build android --release -- --packageType=bundle
 
-          # 6. التوقيع الرقمي
+          # 7. التوقيع
           find platforms/android/app/build/outputs/apk/release -name "*.apk" -exec jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA256 -keystore release.keystore -storepass password123 {} app_alias \;
           find platforms/android/app/build/outputs/bundle/release -name "*.aab" -exec jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA256 -keystore release.keystore -storepass password123 {} app_alias \;
 
