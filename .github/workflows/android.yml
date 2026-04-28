@@ -1,4 +1,4 @@
-name: Build & Sign (Final Fix - Stable Version)
+name: Final Recovery Build
 
 on:
   push:
@@ -14,7 +14,7 @@ jobs:
       - name: Setup Java JDK
         uses: actions/setup-java@v4
         with:
-          java-version: '11' # العودة لـ 11 لتجنب تعارض Gradle 9
+          java-version: '11'
           distribution: 'temurin'
 
       - name: Setup Node.js
@@ -30,7 +30,7 @@ jobs:
           # 1. تنظيف شامل
           rm -rf platforms/ plugins/
           
-          # 2. إضافة منصة أندرويد 10 (الأكثر استقراراً لهذه المكتبات)
+          # 2. إضافة منصة أندرويد 10
           cordova platform add android@10.1.2
           
           # 3. تثبيت الإضافات
@@ -38,26 +38,29 @@ jobs:
           cordova plugin add cordova-plugin-androidx-adapter
           cordova plugin add cordova-plugin-admob-free --variable ADMOB_APP_ID="ca-app-pub-9756015724360400~1341007605"
           
-          # 4. [الحل الحاسم] إجبار استخدام Gradle 7.6 (الذي يحتوي على XmlParser)
-          mkdir -p platforms/android/gradle/wrapper
-          echo "distributionUrl=https\://services.gradle.org/distributions/gradle-7.6-bin.zip" > platforms/android/gradle/wrapper/gradle-wrapper.properties
+          # 4. [الحل العبقري] إصلاح كود كوردوفا اللي بيعمل خطأ XmlParser
+          # السطر ده بيبدل المكتبة القديمة بمكتبة متوافقة مع الإصدارات الجديدة
+          sed -i 's/new XmlParser(/new groovy.xml.XmlParser(/g' platforms/android/CordovaLib/cordova.gradle || true
           
-          # 5. إنشاء مفتاح التوقيع
+          # 5. إجبار استخدام Gradle 7.5 (المستقر)
+          mkdir -p platforms/android/gradle/wrapper
+          echo "distributionUrl=https\://services.gradle.org/distributions/gradle-7.5-bin.zip" > platforms/android/gradle/wrapper/gradle-wrapper.properties
+          
+          # 6. إنشاء مفتاح التوقيع
           keytool -genkey -v -keystore release.keystore -alias app_alias -keyalg RSA -keysize 2048 -validity 10000 -storepass password123 -keypass password123 -dname "CN=Zakaria, O=Dev, C=JP"
 
-          # 6. البناء
-          echo "Building APK and AAB..."
+          # 7. البناء النهائي
           cordova build android --release -- --packageType=apk
           cordova build android --release -- --packageType=bundle
 
-          # 7. التوقيع الرقمي
-          find platforms/android/app/build/outputs -name "*.apk" -exec jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA256 -keystore release.keystore -storepass password123 {} app_alias \;
-          find platforms/android/app/build/outputs -name "*.aab" -exec jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA256 -keystore release.keystore -storepass password123 {} app_alias \;
+          # 8. التوقيع
+          find platforms/android/app/build/outputs -name "*.apk" -exec jarsigner -keystore release.keystore -storepass password123 {} app_alias \;
+          find platforms/android/app/build/outputs -name "*.aab" -exec jarsigner -keystore release.keystore -storepass password123 {} app_alias \;
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: App-Packages
+          name: Production-Files
           path: |
             platforms/android/app/build/outputs/apk/release/*.apk
             platforms/android/app/build/outputs/bundle/release/*.aab
