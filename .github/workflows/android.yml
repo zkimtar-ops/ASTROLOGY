@@ -25,11 +25,22 @@ jobs:
       - name: Install Cordova
         run: npm install -g cordova --no-audit
 
-      - name: Clean Environment
-        run: rm -rf platforms plugins node_modules
+      - name: Create package.json if missing
+        run: |
+          if [ ! -f package.json ]; then
+            echo '{
+              "name": "hoshinomichibiki",
+              "version": "1.0.0",
+              "description": "Astrology App",
+              "main": "index.js",
+              "scripts": {},
+              "author": "Zakaria",
+              "license": "ISC"
+            }' > package.json
+          fi
 
-      - name: Install Dependencies
-        run: npm install
+      - name: Clean Environment
+        run: rm -rf platforms plugins
 
       - name: Add Android Platform
         run: cordova platform add android@13.0.0
