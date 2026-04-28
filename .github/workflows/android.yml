@@ -1,19 +1,156 @@
-- name: Fix AGP Compatibility
-        run: |
-          # تعديل إصدار Android Gradle Plugin في build.gradle
-          sed -i "s/com.android.tools.build:gradle:[0-9.]*/com.android.tools.build:gradle:8.3.0/" \
-            platforms/android/build.gradle || true
-          
-          echo "=== build.gradle الحالي ==="
-          cat platforms/android/build.gradle
+name: Astrology_Build
 
-      - name: Build Release APK and AAB
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android Build Tools
         run: |
-          cd platforms/android/tools
-          ./gradlew -p .. assembleRelease \
-            -Pandroid.injected.signing.store.file=${{ github.workspace }}/release.jks \
-            -Pandroid.injected.signing.store.password=123456 \
-            -Pandroid.injected.signing.key.alias=astro_key \
-            -Pandroid.injected.signing.key.password=123456 \
-            -x lint \
-            --info 2>&1 | grep -E "FAILED|ERROR|error:|warning:|BUILD" | head -30
+          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+
+      - name: Install Cordova
+        run: npm install -g cordova --no-audit
+
+      - name: Create package.json
+        run: |
+          if [ ! -f package.json ]; then
+            echo '{
+              "name": "hoshinomichibiki",
+              "version": "1.0.0",
+              "description": "Astrology App",
+              "author": "Zakaria",
+              "license": "ISC"
+            }' > package.json
+          fi
+
+      - name: Clean Environment
+        run: rm -rf platforms plugins
+
+      - name: Add Android Platform
+        run: cordova platform add android@13.0.0
+
+      - name: Add Plugins
+        run: |
+          cordova plugin add cordova-plugin-androidx-adapter
+          cordova prepare android
+
+      - name: Configure Gradle Properties
+        run: |
+          cat >> platforms/android/gradle.properties << 'EOF'
+          android.useAndroidX=true
+          android.enableJetifier=true
+          android.enableAapt2=false
+          EOF
+
+      - name: Generate Keystore
+        run: |
+          keytool -genkey -v \
+            -keystore ${{ github.workspace }}/release.jks \
+            -alias astro_key \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -storepass 123456 \
+            -keypass 123456 \
+            -dname "CN=Zakaria" \
+            -deststoretype pkcs12
+
+      - name: Build APK via Cordova
+        run: |
+          cordova build android --release -- \
+            --keystore=${{ github.workspace }}/release.jks \
+            --storePassword=123456 \
+            --alias=astro_key \
+            --password=123456
+        continue-on-error: true
+
+      - name: Build AAB via Gradle
+        run: |
+          # البحث عن gradlew في أي مكان
+          GRADLEW=$(find platforms/android -name "gradlew" | head -1)
+          echo "gradlew location: $GRADLEW"
+          
+          if [ -n "$GRADLEW" ]; then
+            chmod +x "$GRADLEW"
+            GRADLE_DIR=$(dirname "$GRADLEW")
+            cd "$GRADLE_DIR"
+            ./gradlew bundleRelease \
+              -Pandroid.injected.signing.store.file=${{ github.workspace }}/release.jks \
+              -Pandroid.injected.signing.store.password=123456 \
+              -Pandroid.injected.signing.key.alias=astro_key \
+              -Pandroid.injected.signing.key.password=123456 \
+              -x lint 2>&1
+          else
+            echo "⚠️ gradlew غير موجود"
+          fi
+        continue-on-error: true
+
+      - name: Find All Output Files
+        run: |
+          echo "=== APK ==="
+          find platforms/android -name "*.apk" 2>/dev/null
+          echo "=== AAB ==="
+          find platforms/android -name "*.aab" 2>/dev/null
+          echo "=== كل مجلد build ==="
+          find platforms/android/app/build -type f 2>/dev/null | head -20 || echo "لا يوجد"
+
+      - name: Copy Output Files
+        run: |
+          mkdir -p output
+
+          APK=$(find platforms/android -name "*.apk" | head -1)
+          if [ -n "$APK" ]; then
+            cp "$APK" output/Astrology_Final.apk
+            echo "✅ APK موجود"
+          else
+            echo "⚠️ لا يوجد APK"
+          fi
+
+          AAB=$(find platforms/android -name "*.aab" | head -1)
+          if [ -n "$AAB" ]; then
+            cp "$AAB" output/Astrology_Final.aab
+            echo "✅ AAB موجود"
+          else
+            echo "⚠️ لا يوجد AAB"
+          fi
+
+          ls -la output/
+          if [ -z "$(ls -A output/)" ]; then
+            echo "❌ لا يوجد أي ملف!"
+            exit 1
+          fi
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: APK_READY
+          path: output/Astrology_Final.apk
+          if-no-files-found: warn
+
+      - name: Upload AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: AAB_READY
+          path: output/Astrology_Final.aab
+          if-no-files-found: warn
