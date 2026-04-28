@@ -14,7 +14,7 @@ jobs:
       - name: Setup Java JDK
         uses: actions/setup-java@v4
         with:
-          java-version: '17' # تحديث إجباري ليتوافق مع Gradle 9
+          java-version: '17'
           distribution: 'temurin'
 
       - name: Setup Node.js
@@ -27,32 +27,33 @@ jobs:
 
       - name: Build Process
         run: |
-          # إنشاء المشروع
-          cordova create build_dir com.zakaria.hoshinomichibiki "星.導き"
+          # 1. إنشاء المشروع
+          cordova create build_dir com.zakaria.hoshinomichibiki "星の導き"
           
-          # نسخ الملفات
+          # 2. نسخ الملفات
           cp config.xml build_dir/
           if [ -d "www" ]; then cp -r www/* build_dir/www/; fi
           
           cd build_dir
           
-          # إضافة منصة أندرويد 12 (تدعم Java 17 بشكل أفضل)
-          cordova platform add android@12.0.0
+          # 3. إضافة منصة أندرويد 13 (الأحدث والأكثر استقراراً مع Java 17)
+          cordova platform add android@13.0.0
           
-          # تثبيت الإضافة
+          # 4. تثبيت الإضافة
           cordova plugin add cordova-plugin-admob-free --variable ADMOB_APP_ID="ca-app-pub-9756015724360400~1341007605"
           
-          # إنشاء مفتاح التوقيع
+          # 5. منع استخدام Gradle 9 عبر تحديد إصدار متوافق في الملفات الداخلية
+          echo "distributionUrl=https\://services.gradle.org/distributions/gradle-8.7-bin.zip" > platforms/android/gradle/wrapper/gradle-wrapper.properties
+          
+          # 6. إنشاء مفتاح التوقيع
           keytool -genkey -v -keystore release.keystore -alias app_alias -keyalg RSA -keysize 2048 -validity 10000 -storepass password123 -keypass password123 -dname "CN=Zakaria, O=Dev, C=JP"
 
-          # بناء الملفات مع تمرير أمر لتجاهل تعارضات Gradle إن وجدت
-          echo "Building APK..."
+          # 7. بناء الملفات
+          echo "Building APK and AAB..."
           cordova build android --release -- --packageType=apk
-          
-          echo "Building AAB..."
           cordova build android --release -- --packageType=bundle
 
-          # التوقيع الرقمي (البحث عن الملفات وتوقيعها)
+          # 8. التوقيع الرقمي
           find platforms/android/app/build/outputs/apk/release -name "*.apk" -exec jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA256 -keystore release.keystore -storepass password123 {} app_alias \;
           find platforms/android/app/build/outputs/bundle/release -name "*.aab" -exec jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA256 -keystore release.keystore -storepass password123 {} app_alias \;
 
