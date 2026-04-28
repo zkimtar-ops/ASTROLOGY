@@ -14,76 +14,52 @@ jobs:
       - name: Setup Java JDK
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
+          java-version: '11' # العودة للإصدار 11 لضمان توافق Gradle Wrapper
           distribution: 'temurin'
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '18'
 
       - name: Install Cordova
         run: npm install -g cordova
 
-      - name: Create Project and Build
+      - name: Build Process
         run: |
-          # 1. عرض الملفات الموجودة للتأكد من وجود config.xml و مجلد www
-          echo "Listing files in root:"
-          ls -R
-          
-          # 2. إنشاء المشروع
+          # إنشاء المشروع
           cordova create build_dir com.zakaria.hoshinomichibiki "星の導き"
           
-          # التحقق من وجود الملفات قبل النسخ
-          if [ ! -f config.xml ]; then echo "❌ Error: config.xml missing in root!"; exit 1; fi
+          # نسخ الملفات الأساسية
           cp config.xml build_dir/
+          if [ -d "www" ]; then cp -r www/* build_dir/www/; fi
           
           cd build_dir
           
-          # 3. إضافة المنصة (استخدام نسخة مستقرة)
-          cordova platform add android@12.0.0
+          # إضافة منصة أندرويد (إصدار مستقر جداً)
+          cordova platform add android@11.0.0
           
-          # 4. تثبيت الإضافة مع معرف التطبيق
+          # تثبيت الإضافة
           cordova plugin add cordova-plugin-admob-free --variable ADMOB_APP_ID="ca-app-pub-9756015724360400~1341007605"
           
-          # 5. نسخ ملفات الويب
-          rm -rf www/*
-          if [ -d "../www" ]; then 
-            cp -r ../www/* www/
-          else
-            echo "❌ Error: www folder missing!"; exit 1;
-          fi
-          
-          # 6. إنشاء مفتاح التوقيع
-          keytool -genkey -v -keystore release.keystore -alias app_alias -keyalg RSA -keysize 2048 -validity 10000 -storepass password123 -keypass password123 -dname "CN=Zakaria, OU=Dev, O=Edogawa, L=Tokyo, S=Tokyo, C=JP"
+          # إنشاء مفتاح التوقيع
+          keytool -genkey -v -keystore release.keystore -alias app_alias -keyalg RSA -keysize 2048 -validity 10000 -storepass password123 -keypass password123 -dname "CN=Zakaria, O=Dev, C=JP"
 
-          # 7. بناء APK و AAB
+          # البدء بالبناء
           echo "Building APK..."
           cordova build android --release -- --packageType=apk
           
           echo "Building AAB..."
           cordova build android --release -- --packageType=bundle
 
-          # 8. توقيع الملفات (استخدام محددات أكثر مرونة للمسارات)
-          APK_FILE=$(find platforms/android/app/build/outputs/apk/release -name "*.apk" | head -n 1)
-          AAB_FILE=$(find platforms/android/app/build/outputs/bundle/release -name "*.aab" | head -n 1)
-          
-          if [ -f "$APK_FILE" ]; then
-            jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA256 -keystore release.keystore -storepass password123 "$APK_FILE" app_alias
-          fi
-          
-          if [ -f "$AAB_FILE" ]; then
-            jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA256 -keystore release.keystore -storepass password123 "$AAB_FILE" app_alias
-          fi
+          # التوقيع الرقمي
+          find platforms/android/app/build/outputs/apk/release -name "*.apk" -exec jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA256 -keystore release.keystore -storepass password123 {} app_alias \;
+          find platforms/android/app/build/outputs/bundle/release -name "*.aab" -exec jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA256 -keystore release.keystore -storepass password123 {} app_alias \;
 
-      - name: Upload Signed APK
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Signed-APK
-          path: build_dir/platforms/android/app/build/outputs/apk/release/*.apk
-
-      - name: Upload Signed AAB
-        uses: actions/upload-artifact@v4
-        with:
-          name: Signed-AAB
-          path: build_dir/platforms/android/app/build/outputs/bundle/release/*.aab
+          name: App-Packages
+          path: |
+            build_dir/platforms/android/app/build/outputs/apk/release/*.apk
+            build_dir/platforms/android/app/build/outputs/bundle/release/*.aab
