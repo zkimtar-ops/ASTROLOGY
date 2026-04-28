@@ -1,0 +1,38 @@
+<?xml version='1.0' encoding='utf-8'?>
+<widget id="com.zakaria.hoshinomichibiki" version="1.0.0" xmlns="http://www.w3.org/ns/widgets" xmlns:cdv="http://cordova.apache.org/ns/1.0">
+    
+    <name>星の導き</name>
+    
+    <description>
+        تطبيق "هدي النجوم" - مشروع مقدم من زكريا مطر لخدمة المجتمع.
+    </description>
+    
+    <author email="dev@example.com" href="https://edogawa.city">
+        Zakaria Matar
+    </author>
+    
+    <content src="index.html" />
+    
+    <access origin="*" />
+    <allow-intent href="http://*/*" />
+    <allow-intent href="https://*/*" />
+    <allow-intent href="tel:*" />
+    <allow-intent href="sms:*" />
+
+    <plugin name="cordova-plugin-admob-free" spec="^0.27.0">
+        <variable name="ADMOB_APP_ID" value="ca-app-pub-9756015724360400~1341007605" />
+    </plugin>
+    
+    <plugin name="cordova-plugin-whitelist" spec="1.3.5" />
+
+    <platform name="android">
+        <preference name="AndroidXEnabled" value="true" />
+        
+        <icon src="www/icon.png" />
+        
+        </platform>
+
+    <preference name="Fullscreen" value="false" />
+    <preference name="BackgroundColor" value="0xffffffff" />
+
+</widget>
