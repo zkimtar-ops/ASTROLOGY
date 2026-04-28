@@ -26,8 +26,7 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Install Android Build Tools
-        run: |
-          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+        run: sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
       - name: Install Cordova
         run: npm install -g cordova --no-audit
@@ -60,7 +59,6 @@ jobs:
           cat >> platforms/android/gradle.properties << 'EOF'
           android.useAndroidX=true
           android.enableJetifier=true
-          android.enableAapt2=false
           EOF
 
       - name: Generate Keystore
@@ -76,34 +74,28 @@ jobs:
             -dname "CN=Zakaria" \
             -deststoretype pkcs12
 
-      - name: Build APK via Cordova
+      - name: Build APK and AAB
         run: |
-          cordova build android --release -- \
-            --keystore=${{ github.workspace }}/release.jks \
-            --storePassword=123456 \
-            --alias=astro_key \
-            --password=123456
-        continue-on-error: true
+          GRADLEW="platforms/android/tools/gradlew"
+          chmod +x "$GRADLEW"
 
-      - name: Build AAB via Gradle
-        run: |
-          # البحث عن gradlew في أي مكان
-          GRADLEW=$(find platforms/android -name "gradlew" | head -1)
-          echo "gradlew location: $GRADLEW"
-          
-          if [ -n "$GRADLEW" ]; then
-            chmod +x "$GRADLEW"
-            GRADLE_DIR=$(dirname "$GRADLEW")
-            cd "$GRADLE_DIR"
-            ./gradlew bundleRelease \
-              -Pandroid.injected.signing.store.file=${{ github.workspace }}/release.jks \
-              -Pandroid.injected.signing.store.password=123456 \
-              -Pandroid.injected.signing.key.alias=astro_key \
-              -Pandroid.injected.signing.key.password=123456 \
-              -x lint 2>&1
-          else
-            echo "⚠️ gradlew غير موجود"
-          fi
+          echo "=== بناء APK ==="
+          "$GRADLEW" -p platforms/android :app:assembleRelease \
+            -Pandroid.injected.signing.store.file=${{ github.workspace }}/release.jks \
+            -Pandroid.injected.signing.store.password=123456 \
+            -Pandroid.injected.signing.key.alias=astro_key \
+            -Pandroid.injected.signing.key.password=123456 \
+            -x lint \
+            --stacktrace 2>&1
+
+          echo "=== بناء AAB ==="
+          "$GRADLEW" -p platforms/android :app:bundleRelease \
+            -Pandroid.injected.signing.store.file=${{ github.workspace }}/release.jks \
+            -Pandroid.injected.signing.store.password=123456 \
+            -Pandroid.injected.signing.key.alias=astro_key \
+            -Pandroid.injected.signing.key.password=123456 \
+            -x lint \
+            --stacktrace 2>&1
         continue-on-error: true
 
       - name: Find All Output Files
@@ -112,8 +104,6 @@ jobs:
           find platforms/android -name "*.apk" 2>/dev/null
           echo "=== AAB ==="
           find platforms/android -name "*.aab" 2>/dev/null
-          echo "=== كل مجلد build ==="
-          find platforms/android/app/build -type f 2>/dev/null | head -20 || echo "لا يوجد"
 
       - name: Copy Output Files
         run: |
