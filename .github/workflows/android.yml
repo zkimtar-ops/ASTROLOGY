@@ -1,4 +1,4 @@
-name: FINAL_ATOMIC_BUILD
+name: Final_Direct_Build
 
 on:
   push:
@@ -22,35 +22,27 @@ jobs:
         with:
           gradle-version: '8.7'
 
-      - name: Build Android App
+      - name: Build
         run: |
           npm install -g cordova --no-audit
           rm -rf node_modules package-lock.json platforms plugins
           
+          # إضافة المنصة والإضافات الأساسية (بدون AdMob عشان نكسر حلقة الفشل)
           cordova platform add android@13.0.0
-          
-          # 1. هننزل الإضافات من غير AdMob خالص عشان نضمن إن الـ Build يعدي
           cordova plugin add cordova-plugin-androidx
           cordova plugin add cordova-plugin-androidx-adapter
           
           cordova prepare android
 
-          # 2. تنظيف ملفات الـ XML التالفة يدويًا (سبب الخطأ في الصورة)
-          echo "Cleaning corrupted resources..."
-          find platforms/android/app/src/main/res/values -name "*.xml" -exec sed -i '/common_google_signin_btn_text/d' {} + || true
+          # إجبار التوافق
+          echo "android.useAndroidX=true" >> platforms/android/gradle.properties
+          echo "android.enableJetifier=true" >> platforms/android/gradle.properties
+          echo "android.aapt2.no-optimize=true" >> platforms/android/gradle.properties
 
-          # 3. إعدادات القوة القصوى لتخطي الأخطاء
-          cat <<EOF > platforms/android/gradle.properties
-          android.useAndroidX=true
-          android.enableJetifier=true
-          android.aapt2.no-optimize=true
-          android.nonTransitiveRClass=true
-          EOF
-
-          # 4. التوقيع
+          # إنشاء مفتاح توقيع سريع
           keytool -genkey -v -keystore release.jks -alias astro_key -keyalg RSA -keysize 2048 -validity 10000 -storepass 123456 -keypass 123456 -dname "CN=Zakaria" -deststoretype pkcs12
 
-          # 5. البناء المباشر (Direct Gradle)
+          # بناء مباشر عن طريق Gradle لتخطي تعقيدات كوردوفا
           cd platforms/android
           ./gradlew assembleRelease -Pandroid.injected.signing.store.file=$(pwd)/../../release.jks -Pandroid.injected.signing.store.password=123456 -Pandroid.injected.signing.key.alias=astro_key -Pandroid.injected.signing.key.password=123456
 
@@ -60,5 +52,5 @@ jobs:
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: Result
+          name: App-Ready
           path: output/
