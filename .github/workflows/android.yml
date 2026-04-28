@@ -49,6 +49,11 @@ jobs:
       - name: Add Android Platform
         run: cordova platform add android@13.0.0
 
+      - name: Show Full Platform Structure
+        run: |
+          echo "=== كل محتوى platforms/android ==="
+          find platforms/android -maxdepth 4 -type f | sort
+
       - name: Add Plugins
         run: |
           cordova plugin add cordova-plugin-androidx-adapter
@@ -74,10 +79,53 @@ jobs:
             -dname "CN=Zakaria" \
             -deststoretype pkcs12
 
+      - name: Setup Gradle Wrapper
+        run: |
+          # البحث عن gradle-wrapper.jar في node_modules
+          JAR=$(find /usr /home /opt -name "gradle-wrapper.jar" 2>/dev/null | head -1)
+          echo "gradle-wrapper.jar found at: $JAR"
+
+          # تحديد مجلد tools
+          TOOLS_DIR="platforms/android/tools"
+          mkdir -p "$TOOLS_DIR/gradle/wrapper"
+
+          # تحميل gradle-wrapper.jar من GitHub Releases الرسمي
+          curl -fsSL \
+            "https://github.com/gradle/gradle/releases/download/v8.7.0/gradle-8.7-bin.zip" \
+            -o /tmp/gradle.zip
+          unzip -q /tmp/gradle.zip -d /tmp/gradle-dist
+          REAL_JAR=$(find /tmp/gradle-dist -name "gradle-wrapper.jar" | head -1)
+          
+          if [ -z "$REAL_JAR" ]; then
+            # استخراج من داخل jar نفسه
+            find /tmp/gradle-dist -name "*.jar" | head -5
+          else
+            cp "$REAL_JAR" "$TOOLS_DIR/gradle/wrapper/gradle-wrapper.jar"
+            echo "✅ تم نسخ gradle-wrapper.jar"
+          fi
+
+          cat > "$TOOLS_DIR/gradle/wrapper/gradle-wrapper.properties" << 'EOF'
+          distributionBase=GRADLE_USER_HOME
+          distributionPath=wrapper/dists
+          distributionUrl=https\://services.gradle.org/distributions/gradle-8.7-bin.zip
+          zipStoreBase=GRADLE_USER_HOME
+          zipStorePath=wrapper/dists
+          EOF
+
+          cat > "$TOOLS_DIR/gradlew" << 'GRADLEW'
+          #!/usr/bin/env sh
+          APP_HOME="$(cd "$(dirname "$0")" && pwd)"
+          exec java -classpath "$APP_HOME/gradle/wrapper/gradle-wrapper.jar" \
+            org.gradle.wrapper.GradleWrapperMain "$@"
+          GRADLEW
+
+          chmod +x "$TOOLS_DIR/gradlew"
+          ls -la "$TOOLS_DIR/"
+          ls -la "$TOOLS_DIR/gradle/wrapper/"
+
       - name: Build APK and AAB
         run: |
           GRADLEW="platforms/android/tools/gradlew"
-          chmod +x "$GRADLEW"
 
           echo "=== بناء APK ==="
           "$GRADLEW" -p platforms/android :app:assembleRelease \
@@ -85,8 +133,7 @@ jobs:
             -Pandroid.injected.signing.store.password=123456 \
             -Pandroid.injected.signing.key.alias=astro_key \
             -Pandroid.injected.signing.key.password=123456 \
-            -x lint \
-            --stacktrace 2>&1
+            -x lint 2>&1
 
           echo "=== بناء AAB ==="
           "$GRADLEW" -p platforms/android :app:bundleRelease \
@@ -94,8 +141,7 @@ jobs:
             -Pandroid.injected.signing.store.password=123456 \
             -Pandroid.injected.signing.key.alias=astro_key \
             -Pandroid.injected.signing.key.password=123456 \
-            -x lint \
-            --stacktrace 2>&1
+            -x lint 2>&1
         continue-on-error: true
 
       - name: Find All Output Files
