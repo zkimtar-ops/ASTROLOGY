@@ -27,34 +27,36 @@ jobs:
           npm install -g cordova --no-audit
           rm -rf platforms plugins node_modules
           
-          # 1. إضافة المنصة (أندرويد 13)
+          # 1. إضافة المنصة
           cordova platform add android@13.0.0
           
-          # 2. تثبيت الإضافات (بدون AdMob خالص عشان نضمن الـ Build)
+          # 2. إزالة الإضافات القديمة اللي بتعمل تعارض مع أندرويد 13
+          cordova plugin remove cordova-plugin-whitelist || true
           cordova plugin add cordova-plugin-androidx-adapter
           
+          # 3. توليد ملفات البناء (مهم جداً)
           cordova prepare android
 
-          # 3. إعدادات التوافق
+          # 4. إعدادات التوافق
           echo "android.useAndroidX=true" >> platforms/android/gradle.properties
           echo "android.enableJetifier=true" >> platforms/android/gradle.properties
           echo "android.aapt2.no-optimize=true" >> platforms/android/gradle.properties
           
-          # 4. إنشاء المفتاح
+          # 5. إنشاء المفتاح
           keytool -genkey -v -keystore release.jks -alias key0 -keyalg RSA -keysize 2048 -validity 10000 -storepass 123456 -keypass 123456 -dname "CN=Zakaria" -deststoretype pkcs12
 
-          # 5. البناء (المسار الصحيح لـ gradlew)
+          # 6. البحث عن gradlew وتشغيله أياً كان مكانه
           cd platforms/android
-          chmod +x gradlew
-          ./gradlew assembleRelease \
-            -Pandroid.injected.signing.store.file=$(pwd)/../../release.jks \
-            -Pandroid.injected.signing.store.password=123456 \
-            -Pandroid.injected.signing.key.alias=key0 \
-            -Pandroid.injected.signing.key.password=123456
+          find . -name gradlew -exec chmod +x {} +
+          
+          # استخدام أمر كوردوفا المباشر للبناء لأنه أضمن في التعامل مع المسارات
+          cd ../..
+          cordova build android --release -- --packageType=apk \
+            --keystore=release.jks --storePassword=123456 --alias=key0 --password=123456
 
-          # 6. تجميع الملف النهائي
-          mkdir -p ../../output
-          cp app/build/outputs/apk/release/*.apk ../../output/Final_Astrology.apk
+          # 7. تجميع الملف النهائي
+          mkdir -p output
+          find platforms/android/app/build/outputs/apk/release/ -name "*.apk" -exec cp {} output/Final_Astrology.apk \;
 
       - name: Upload
         uses: actions/upload-artifact@v4
