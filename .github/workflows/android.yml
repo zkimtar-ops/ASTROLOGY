@@ -1,4 +1,4 @@
-name: Astrology_Absolute_Fix
+name: FINAL_ATOMIC_BUILD
 
 on:
   push:
@@ -27,53 +27,38 @@ jobs:
           npm install -g cordova --no-audit
           rm -rf node_modules package-lock.json platforms plugins
           
-          cordova platform add android@13.0.0 --save
+          cordova platform add android@13.0.0
           
-          # 1. تثبيت الإضافات الأساسية
+          # 1. هننزل الإضافات من غير AdMob خالص عشان نضمن إن الـ Build يعدي
           cordova plugin add cordova-plugin-androidx
           cordova plugin add cordova-plugin-androidx-adapter
-          # تثبيت AdMob بدون متغيرات في البداية لمنع تكرار المانيفست
-          cordova plugin add community-cordova-plugin-admob 
           
           cordova prepare android
 
-          # 2. الحل النووي لخطأ mergeReleaseResources
-          # السطر ده بيوقف تدقيق AAPT2 اللي بيوقف الـ Build بتاعك
-          echo "android.aapt2.no-optimize=true" >> platforms/android/gradle.properties
-          echo "android.useAndroidX=true" >> platforms/android/gradle.properties
-          echo "android.enableJetifier=true" >> platforms/android/gradle.properties
-          
-          # 3. تنظيف المانيفست من أي تكرار يدوي
-          sed -i '/com.google.android.gms.ads.APPLICATION_ID/d' platforms/android/app/src/main/AndroidManifest.xml || true
-          sed -i '/<\/application>/i <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-9756015724360400~1341007605"\/>' platforms/android/app/src/main/AndroidManifest.xml
+          # 2. تنظيف ملفات الـ XML التالفة يدويًا (سبب الخطأ في الصورة)
+          echo "Cleaning corrupted resources..."
+          find platforms/android/app/src/main/res/values -name "*.xml" -exec sed -i '/common_google_signin_btn_text/d' {} + || true
 
-          # 4. حذف ملفات الـ Cache اللي بتبوظ الـ Build في كل مرة
-          rm -rf platforms/android/app/build/intermediates/incremental/
-
-          # 5. التوقيع
-          keytool -genkey -v -keystore release.jks -alias astro_key -keyalg RSA -keysize 2048 -validity 10000 -storepass 123456 -keypass 123456 -dname "CN=Zakaria, O=AstrologyApp" -deststoretype pkcs12
-
-          cat <<EOF > build.json
-          {
-              "android": {
-                  "release": {
-                      "keystore": "release.jks",
-                      "storePassword": "123456",
-                      "alias": "astro_key",
-                      "password": "123456"
-                  }
-              }
-          }
+          # 3. إعدادات القوة القصوى لتخطي الأخطاء
+          cat <<EOF > platforms/android/gradle.properties
+          android.useAndroidX=true
+          android.enableJetifier=true
+          android.aapt2.no-optimize=true
+          android.nonTransitiveRClass=true
           EOF
 
-          # 6. البناء مع تخطي أخطاء الموارد تماماً
-          ./platforms/android/gradlew -p platforms/android assembleRelease -Pandroid.aapt2.no-optimize=true
+          # 4. التوقيع
+          keytool -genkey -v -keystore release.jks -alias astro_key -keyalg RSA -keysize 2048 -validity 10000 -storepass 123456 -keypass 123456 -dname "CN=Zakaria" -deststoretype pkcs12
 
-          mkdir -p output
-          cp platforms/android/app/build/outputs/apk/release/*.apk ./output/Astrology_Success.apk || true
+          # 5. البناء المباشر (Direct Gradle)
+          cd platforms/android
+          ./gradlew assembleRelease -Pandroid.injected.signing.store.file=$(pwd)/../../release.jks -Pandroid.injected.signing.store.password=123456 -Pandroid.injected.signing.key.alias=astro_key -Pandroid.injected.signing.key.password=123456
 
-      - name: Upload Artifacts
+          mkdir -p ../../output
+          cp app/build/outputs/apk/release/*.apk ../../output/Astrology_Final.apk
+
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: Astrology-Package
+          name: Result
           path: output/
