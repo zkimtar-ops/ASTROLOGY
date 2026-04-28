@@ -1,4 +1,4 @@
-name: Astrology_Emergency_Fix_Final
+name: Astrology_Absolute_Fix
 
 on:
   push:
@@ -29,24 +29,26 @@ jobs:
           
           cordova platform add android@13.0.0 --save
           
-          # 1. تثبيت الإضافات (بدون إضافة AdMob هنا لأنها هي اللي بتبوظ الـ Manifest)
+          # 1. تثبيت الإضافات الأساسية
           cordova plugin add cordova-plugin-androidx
           cordova plugin add cordova-plugin-androidx-adapter
+          # تثبيت AdMob بدون متغيرات في البداية لمنع تكرار المانيفست
+          cordova plugin add community-cordova-plugin-admob 
           
           cordova prepare android
 
-          # 2. تنظيف الـ Manifest من أي فضلات قديمة AdMob سابتها
-          sed -i '/com.google.android.gms.ads.APPLICATION_ID/d' platforms/android/app/src/main/AndroidManifest.xml || true
-          
-          # 3. حقن الكود يدوياً في المكان الصح وبدون تكرار
-          sed -i '/<\/application>/i <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-9756015724360400~1341007605"\/>' platforms/android/app/src/main/AndroidManifest.xml
-
-          # 4. تعطيل الـ Resource Validation اللي بيطلع لك خطأ (Task :app:mergeReleaseResources FAILED)
+          # 2. الحل النووي لخطأ mergeReleaseResources
+          # السطر ده بيوقف تدقيق AAPT2 اللي بيوقف الـ Build بتاعك
+          echo "android.aapt2.no-optimize=true" >> platforms/android/gradle.properties
           echo "android.useAndroidX=true" >> platforms/android/gradle.properties
           echo "android.enableJetifier=true" >> platforms/android/gradle.properties
-          echo "android.aapt2.no-optimize=true" >> platforms/android/gradle.properties
-          # السطر السحري لمنع توقف البناء بسبب أخطاء الموارد
-          echo "android.nonTransitiveRClass=true" >> platforms/android/gradle.properties
+          
+          # 3. تنظيف المانيفست من أي تكرار يدوي
+          sed -i '/com.google.android.gms.ads.APPLICATION_ID/d' platforms/android/app/src/main/AndroidManifest.xml || true
+          sed -i '/<\/application>/i <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-9756015724360400~1341007605"\/>' platforms/android/app/src/main/AndroidManifest.xml
+
+          # 4. حذف ملفات الـ Cache اللي بتبوظ الـ Build في كل مرة
+          rm -rf platforms/android/app/build/intermediates/incremental/
 
           # 5. التوقيع
           keytool -genkey -v -keystore release.jks -alias astro_key -keyalg RSA -keysize 2048 -validity 10000 -storepass 123456 -keypass 123456 -dname "CN=Zakaria, O=AstrologyApp" -deststoretype pkcs12
@@ -64,11 +66,11 @@ jobs:
           }
           EOF
 
-          # 6. محاولة البناء النهائية
-          cordova build android --release --buildConfig=build.json -- --packageType=apk || (echo "Retry without AdMob..." && cordova build android --release --buildConfig=build.json -- --packageType=apk)
+          # 6. البناء مع تخطي أخطاء الموارد تماماً
+          ./platforms/android/gradlew -p platforms/android assembleRelease -Pandroid.aapt2.no-optimize=true
 
           mkdir -p output
-          cp platforms/android/app/build/outputs/apk/release/*.apk ./output/Astrology_Fixed.apk || true
+          cp platforms/android/app/build/outputs/apk/release/*.apk ./output/Astrology_Success.apk || true
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
