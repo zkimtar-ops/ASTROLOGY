@@ -21,32 +21,39 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
-          gradle-version: '8.7' # هذا الإصدار هو "المفتاح" لحل كل المشاكل السابقة
+          gradle-version: '8.7'
 
       - name: Build Android App
         run: |
-          # 1. تثبيت كوردوفا وتنظيف المشروع
+          # 1. تثبيت كوردوفا وتنظيف شامل
           npm install -g cordova --no-audit
           rm -rf node_modules package-lock.json platforms plugins
           
-          # 2. إضافة المنصة (أندرويد 13 متوافق مع جافا 17)
+          # 2. إضافة المنصة
           cordova platform add android@13.0.0 --save
           
-          # 3. تثبيت الإضافات (Plugins) الخاصة بمشروعك
+          # 3. تثبيت الإضافات (بدون تكرار المعرف هنا لضمان عدم حدوث Duplicate)
           cordova plugin add cordova-plugin-androidx
           cordova plugin add cordova-plugin-androidx-adapter
           cordova plugin add community-cordova-plugin-admob --variable ADMOB_APP_ID="ca-app-pub-9756015724360400~1341007605"
           
+          # 4. التحضير وإصلاح تكرار المانيفست (Manifest Fix)
           cordova prepare android
+          
+          # سكريبت لحذف التكرار من الـ Manifest إذا وجد
+          sed -i '/com.google.android.gms.ads.APPLICATION_ID/d' platforms/android/app/src/main/AndroidManifest.xml || true
+          
+          # إعادة إضافة المعرف مرة واحدة فقط وبشكل نظيف داخل الـ Manifest
+          sed -i '/<\/application>/i <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-9756015724360400~1341007605"\/>' platforms/android/app/src/main/AndroidManifest.xml
 
-          # 4. إصلاح ملفات الـ Properties لضمان عمل AndroidX
+          # 5. إعدادات AndroidX
           echo "android.useAndroidX=true" >> platforms/android/gradle.properties
           echo "android.enableJetifier=true" >> platforms/android/gradle.properties
           
-          # 5. إنشاء مفتاح التوقيع (Keystore)
+          # 6. إنشاء مفتاح التوقيع
           keytool -genkey -v -keystore release.jks -alias astro_key -keyalg RSA -keysize 2048 -validity 10000 -storepass 123456 -keypass 123456 -dname "CN=Zakaria, O=AstrologyApp" -deststoretype pkcs12
 
-          # 6. إنشاء ملف إعدادات البناء build.json للتوقيع التلقائي
+          # 7. ملف build.json
           cat <<EOF > build.json
           {
               "android": {
@@ -61,11 +68,11 @@ jobs:
           }
           EOF
 
-          # 7. بناء APK و AAB (التوقيع سيتم تلقائياً بفضل build.json)
+          # 8. البناء النهائي (التوقيع تلقائي)
           cordova build android --release --buildConfig=build.json -- --packageType=apk
           cordova build android --release --buildConfig=build.json -- --packageType=bundle
 
-          # 8. تجهيز الملفات النهائية للرفع
+          # 9. تجميع المخرجات
           mkdir -p output
           cp platforms/android/app/build/outputs/apk/release/*.apk ./output/Astrology_V1.apk
           cp platforms/android/app/build/outputs/bundle/release/*.aab ./output/Astrology_V1.aab
