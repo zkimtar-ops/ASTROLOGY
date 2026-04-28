@@ -1,0 +1,55 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main ] # سيعمل البناء عند رفع الكود لفرع main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v3
+
+      - name: Setup Java JDK
+        uses: actions/setup-java@v3
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+
+      - name: Install Cordova
+        run: npm install -g cordova
+
+      - name: Create Project and Build APK
+        run: |
+          # إنشاء مجلد البناء المؤقت
+          cordova create build_dir com.zakaria.hoshinomichibiki "星の導き"
+          
+          # نسخ ملف الإعدادات الخاص بك إلى المجلد
+          cp config.xml build_dir/
+          
+          cd build_dir
+          
+          # إضافة منصة أندرويد
+          cordova platform add android
+          
+          # تثبيت إضافة الإعلانات مع معرف التطبيق الخاص بك
+          cordova plugin add cordova-plugin-admob-free --variable ADMOB_APP_ID="ca-app-pub-9756015724360400~1341007605"
+          
+          # نسخ ملفات الـ HTML والـ JS والـ CSS (مجلد www)
+          rm -rf www/*
+          cp -r ../www/* www/
+          
+          # بناء التطبيق (نسخة Release غير موقعة)
+          cordova build android --release
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: Hoshi-no-Michibiki-APK
+          path: build_dir/platforms/android/app/build/outputs/apk/release/*.apk
