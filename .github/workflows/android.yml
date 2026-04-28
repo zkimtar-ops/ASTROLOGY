@@ -25,30 +25,32 @@ jobs:
 
       - name: Build Android App
         run: |
-          # 1. تثبيت كوردوفا وتنظيف شامل
+          # 1. تنظيف شامل
           npm install -g cordova --no-audit
           rm -rf node_modules package-lock.json platforms plugins
           
-          # 2. إضافة المنصة
+          # 2. إضافة المنصة والإضافات
           cordova platform add android@13.0.0 --save
-          
-          # 3. تثبيت الإضافات (بدون تكرار المعرف هنا لضمان عدم حدوث Duplicate)
           cordova plugin add cordova-plugin-androidx
           cordova plugin add cordova-plugin-androidx-adapter
+          
+          # ملاحظة: سنضيف الإضافة هنا بدون المتغير أولاً ثم نعدل الملف يدوياً لمنع التكرار
           cordova plugin add community-cordova-plugin-admob --variable ADMOB_APP_ID="ca-app-pub-9756015724360400~1341007605"
           
-          # 4. التحضير وإصلاح تكرار المانيفست (Manifest Fix)
+          # 3. التحضير
           cordova prepare android
           
-          # سكريبت لحذف التكرار من الـ Manifest إذا وجد
+          # 4. [حل مشكلة التكرار] حذف أي مدخلات مكررة لـ AdMob وإضافتها بشكل سليم مع أداة الدمج
           sed -i '/com.google.android.gms.ads.APPLICATION_ID/d' platforms/android/app/src/main/AndroidManifest.xml || true
           
-          # إعادة إضافة المعرف مرة واحدة فقط وبشكل نظيف داخل الـ Manifest
-          sed -i '/<\/application>/i <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-9756015724360400~1341007605"\/>' platforms/android/app/src/main/AndroidManifest.xml
+          # إضافة السطر مع خاصية tools:replace لمنع تعارض الدمج
+          sed -i 's/<manifest /<manifest xmlns:tools="http:\/\/schemas.android.com\/tools" /' platforms/android/app/src/main/AndroidManifest.xml
+          sed -i '/<\/application>/i <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-9756015724360400~1341007605" tools:replace="android:value"\/>' platforms/android/app/src/main/AndroidManifest.xml
 
-          # 5. إعدادات AndroidX
+          # 5. [حل مشكلة الموارد] تعطيل التحقق الصارم من قيم XML المعطوبة في مكتبات جوجل
           echo "android.useAndroidX=true" >> platforms/android/gradle.properties
           echo "android.enableJetifier=true" >> platforms/android/gradle.properties
+          echo "android.aapt2.no-optimize=true" >> platforms/android/gradle.properties
           
           # 6. إنشاء مفتاح التوقيع
           keytool -genkey -v -keystore release.jks -alias astro_key -keyalg RSA -keysize 2048 -validity 10000 -storepass 123456 -keypass 123456 -dname "CN=Zakaria, O=AstrologyApp" -deststoretype pkcs12
@@ -61,14 +63,13 @@ jobs:
                       "keystore": "release.jks",
                       "storePassword": "123456",
                       "alias": "astro_key",
-                      "password": "123456",
-                      "keystoreType": ""
+                      "password": "123456"
                   }
               }
           }
           EOF
 
-          # 8. البناء النهائي (التوقيع تلقائي)
+          # 8. البناء النهائي
           cordova build android --release --buildConfig=build.json -- --packageType=apk
           cordova build android --release --buildConfig=build.json -- --packageType=bundle
 
