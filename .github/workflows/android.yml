@@ -1,4 +1,4 @@
-name: Astrology_Final_Success
+name: Astrology_Emergency_Fix_Final
 
 on:
   push:
@@ -30,33 +30,34 @@ jobs:
           # 1. إضافة المنصة
           cordova platform add android@13.0.0
           
-          # 2. إزالة الإضافات القديمة اللي بتعمل تعارض مع أندرويد 13
-          cordova plugin remove cordova-plugin-whitelist || true
+          # 2. إضافة الإضافات (فقط الضروري لضمان تخطي أخطاء الـ Resources)
           cordova plugin add cordova-plugin-androidx-adapter
           
-          # 3. توليد ملفات البناء (مهم جداً)
           cordova prepare android
 
-          # 4. إعدادات التوافق
+          # 3. [الحل الحاسم] منع AAPT2 من فحص الموارد التي تسبب الفشل
+          echo "android.aapt2.no-optimize=true" >> platforms/android/gradle.properties
           echo "android.useAndroidX=true" >> platforms/android/gradle.properties
           echo "android.enableJetifier=true" >> platforms/android/gradle.properties
-          echo "android.aapt2.no-optimize=true" >> platforms/android/gradle.properties
-          
-          # 5. إنشاء المفتاح
-          keytool -genkey -v -keystore release.jks -alias key0 -keyalg RSA -keysize 2048 -validity 10000 -storepass 123456 -keypass 123456 -dname "CN=Zakaria" -deststoretype pkcs12
+          # تعطيل ضغط الصور والموارد التي تسبب الخطأ
+          echo "android.packagingOptions.resources.excludes += '**/values.xml'" >> platforms/android/gradle.properties
 
-          # 6. البحث عن gradlew وتشغيله أياً كان مكانه
+          # 4. إنشاء مفتاح التوقيع
+          keytool -genkey -v -keystore release.jks -alias astro_key -keyalg RSA -keysize 2048 -validity 10000 -storepass 123456 -keypass 123456 -dname "CN=Zakaria" -deststoretype pkcs12
+
+          # 5. البناء باستخدام تعليمات برمجية تتخطى أخطاء الدمج
           cd platforms/android
-          find . -name gradlew -exec chmod +x {} +
-          
-          # استخدام أمر كوردوفا المباشر للبناء لأنه أضمن في التعامل مع المسارات
-          cd ../..
-          cordova build android --release -- --packageType=apk \
-            --keystore=release.jks --storePassword=123456 --alias=key0 --password=123456
+          chmod +x gradlew
+          ./gradlew assembleRelease \
+            -Pandroid.injected.signing.store.file=$(pwd)/../../release.jks \
+            -Pandroid.injected.signing.store.password=123456 \
+            -Pandroid.injected.signing.key.alias=astro_key \
+            -Pandroid.injected.signing.key.password=123456 \
+            -x lint
 
-          # 7. تجميع الملف النهائي
-          mkdir -p output
-          find platforms/android/app/build/outputs/apk/release/ -name "*.apk" -exec cp {} output/Final_Astrology.apk \;
+          # 6. نقل الملف الناتج
+          mkdir -p ../../output
+          cp app/build/outputs/apk/release/*.apk ../../output/Astrology_Final_Done.apk
 
       - name: Upload
         uses: actions/upload-artifact@v4
