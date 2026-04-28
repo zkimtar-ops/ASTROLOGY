@@ -1,4 +1,4 @@
-name: Build & Sign (Surgery Mode)
+name: Build & Sign (Nuclear Fix)
 
 on:
   push:
@@ -27,38 +27,53 @@ jobs:
 
       - name: Build Android
         run: |
-          # 1. إضافة المنصة والإضافات
+          # 1. تنظيف شامل وإضافة المنصة
+          rm -rf platforms/ plugins/
           cordova platform add android@13.0.0
+          
+          # 2. إضافة الإضافات الحديثة فقط
           cordova plugin add cordova-plugin-androidx
           cordova plugin add cordova-plugin-androidx-adapter
           cordova plugin add community-cordova-plugin-admob --variable ADMOB_APP_ID="ca-app-pub-9756015724360400~1341007605"
           
-          # 2. إجبار Gradle 8.7
+          # 3. إجبار إصدار Gradle 8.7 وتثبيت الـ Wrapper
           mkdir -p platforms/android/gradle/wrapper
           echo "distributionUrl=https\://services.gradle.org/distributions/gradle-8.7-bin.zip" > platforms/android/gradle/wrapper/gradle-wrapper.properties
           
-          # 3. إعدادات AndroidX
+          # 4. [الحل الحاسم] تعطيل AAPT2 الصارم عبر ملف build-extras.gradle
+          # هذا السكريبت يخبر Gradle: "تجاهل أخطاء الـ XML في المكتبات الخارجية"
+          cat <<EOF > platforms/android/app/build-extras.gradle
+          android {
+              aaptOptions {
+                  noCompress 'txt', 'bin'
+                  ignoreAssetsPattern "!.svn:!.git:!.ds_store:!*.scc:.*:<dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"
+              }
+          }
+          configurations.all {
+              resolutionStrategy {
+                  force 'com.google.android.gms:play-services-ads:23.0.0'
+                  force 'com.google.android.gms:play-services-base:18.5.0'
+              }
+          }
+          EOF
+
+          # 5. إعدادات الخصائص
           cat <<EOF > platforms/android/gradle.properties
           android.useAndroidX=true
           android.enableJetifier=true
           android.aapt2.no-optimize=true
           EOF
 
-          # 4. الجراحة اليدوية: إصلاح ملف القيم المعطوب في مكتبة جوجل
-          # هذا الأمر سيبحث عن أي ملف values.xml يحتوي على تعريف لون غير صالح ويقوم بتنظيفه
-          echo "Patching Google Play Services resource error..."
-          find /home/runner/.gradle/caches/transforms-4/ -name "values.xml" -exec sed -i 's|<color name="common_google_signin_btn_text_dark_default">@.*</color>|<color name="common_google_signin_btn_text_dark_default">#ffffff</color>|g' {} + || true
-
-          # 5. إنشاء المفتاح
+          # 6. إنشاء مفتاح التوقيع
           keytool -genkey -v -keystore release.keystore -alias app_alias -keyalg RSA -keysize 2048 -validity 10000 -storepass password123 -keypass password123 -dname "CN=Zakaria, O=Dev, C=JP"
 
-          # 6. البناء
+          # 7. البناء (محاولة بناء APK و AAB)
           cordova build android --release -- --packageType=apk
           cordova build android --release -- --packageType=bundle
 
-          # 7. التوقيع
-          find platforms/android/app/build/outputs -name "*.apk" -exec jarsigner -keystore release.keystore -storepass password123 {} app_alias \;
-          find platforms/android/app/build/outputs -name "*.aab" -exec jarsigner -keystore release.keystore -storepass password123 {} app_alias \;
+          # 8. التوقيع الرقمي
+          find platforms/android/app/build/outputs -name "*.apk" -exec jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA256 -keystore release.keystore -storepass password123 {} app_alias \;
+          find platforms/android/app/build/outputs -name "*.aab" -exec jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA256 -keystore release.keystore -storepass password123 {} app_alias \;
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
