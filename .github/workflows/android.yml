@@ -43,17 +43,21 @@ jobs:
       - name: Add Android Platform
         run: cordova platform add android@13.0.0
 
-      - name: Download gradlew from Cordova repo
-        run: |
-          cd platforms/android
-          mkdir -p gradle/wrapper
+      - name: Show full platform structure
+        run: find platforms/android -maxdepth 3 -name "gradlew" -o -name "gradle-wrapper.properties" 2>/dev/null
 
-          # تحميل gradlew و gradle-wrapper.jar مباشرة من مستودع cordova-android الرسمي
-          curl -sL "https://raw.githubusercontent.com/apache/cordova-android/13.0.0/templates/project/gradlew" -o gradlew
-          curl -sL "https://raw.githubusercontent.com/apache/cordova-android/13.0.0/templates/project/gradle/wrapper/gradle-wrapper.jar" -o gradle/wrapper/gradle-wrapper.jar
-          
-          # إنشاء gradle-wrapper.properties بإصدار 8.7
-          cat > gradle/wrapper/gradle-wrapper.properties << 'EOF'
+      - name: Setup Gradle Wrapper in tools folder
+        run: |
+          # في cordova-android 13، gradlew موجود في tools/
+          TOOLS_DIR="platforms/android/tools"
+          mkdir -p "$TOOLS_DIR/gradle/wrapper"
+
+          # تحميل gradle-wrapper.jar الحقيقي من gradle الرسمي
+          wget -q "https://github.com/gradle/gradle/raw/v8.7.0/gradle/wrapper/gradle-wrapper.jar" \
+            -O "$TOOLS_DIR/gradle/wrapper/gradle-wrapper.jar"
+
+          # إنشاء gradle-wrapper.properties
+          cat > "$TOOLS_DIR/gradle/wrapper/gradle-wrapper.properties" << 'EOF'
           distributionBase=GRADLE_USER_HOME
           distributionPath=wrapper/dists
           distributionUrl=https\://services.gradle.org/distributions/gradle-8.7-bin.zip
@@ -61,9 +65,19 @@ jobs:
           zipStorePath=wrapper/dists
           EOF
 
-          chmod +x gradlew
-          echo "✅ Files ready:"
-          ls -la gradlew gradle/wrapper/
+          # إنشاء gradlew script
+          cat > "$TOOLS_DIR/gradlew" << 'EOF'
+          #!/usr/bin/env sh
+          APP_HOME="$(dirname "$0")"
+          exec java \
+            -classpath "$APP_HOME/gradle/wrapper/gradle-wrapper.jar" \
+            org.gradle.wrapper.GradleWrapperMain "$@"
+          EOF
+
+          chmod +x "$TOOLS_DIR/gradlew"
+          echo "✅ Structure:"
+          ls -la "$TOOLS_DIR/"
+          ls -la "$TOOLS_DIR/gradle/wrapper/"
 
       - name: Add Plugins
         run: |
@@ -93,8 +107,8 @@ jobs:
 
       - name: Build Release APK
         run: |
-          cd platforms/android
-          ./gradlew assembleRelease \
+          cd platforms/android/tools
+          ./gradlew -p .. assembleRelease \
             -Pandroid.injected.signing.store.file=${{ github.workspace }}/release.jks \
             -Pandroid.injected.signing.store.password=123456 \
             -Pandroid.injected.signing.key.alias=astro_key \
@@ -102,13 +116,4 @@ jobs:
             -x lint \
             --stacktrace
 
-      - name: Copy APK
-        run: |
-          mkdir -p output
-          cp platforms/android/app/build/outputs/apk/release/*.apk output/Astrology_Final.apk
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: APK_READY
-          path: output/
+      -
