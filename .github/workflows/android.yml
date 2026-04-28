@@ -1,4 +1,4 @@
-name: Astrology_Emergency_Fix_Final
+name: Astrology_Build
 
 on:
   push:
@@ -17,49 +17,72 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
-          gradle-version: '8.7'
+          node-version: '18'
 
-      - name: Build
+      - name: Install Cordova
+        run: npm install -g cordova --no-audit
+
+      - name: Clean Environment
+        run: rm -rf platforms plugins node_modules
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Add Android Platform
+        run: cordova platform add android@13.0.0
+
+      - name: Verify gradlew exists
         run: |
-          npm install -g cordova --no-audit
-          rm -rf platforms plugins node_modules
-          
-          # 1. إضافة المنصة
-          cordova platform add android@13.0.0
-          
-          # 2. إضافة الإضافات (فقط الضروري لضمان تخطي أخطاء الـ Resources)
+          ls -la platforms/android/
+          test -f platforms/android/gradlew || (echo "gradlew not found!" && exit 1)
+
+      - name: Add Plugins
+        run: |
           cordova plugin add cordova-plugin-androidx-adapter
-          
           cordova prepare android
 
-          # 3. [الحل الحاسم] منع AAPT2 من فحص الموارد التي تسبب الفشل
-          echo "android.aapt2.no-optimize=true" >> platforms/android/gradle.properties
-          echo "android.useAndroidX=true" >> platforms/android/gradle.properties
-          echo "android.enableJetifier=true" >> platforms/android/gradle.properties
-          # تعطيل ضغط الصور والموارد التي تسبب الخطأ
-          echo "android.packagingOptions.resources.excludes += '**/values.xml'" >> platforms/android/gradle.properties
+      - name: Configure Gradle Properties
+        run: |
+          cat >> platforms/android/gradle.properties << 'EOF'
+          android.useAndroidX=true
+          android.enableJetifier=true
+          android.aapt2.no-optimize=true
+          EOF
 
-          # 4. إنشاء مفتاح التوقيع
-          keytool -genkey -v -keystore release.jks -alias astro_key -keyalg RSA -keysize 2048 -validity 10000 -storepass 123456 -keypass 123456 -dname "CN=Zakaria" -deststoretype pkcs12
+      - name: Generate Keystore
+        run: |
+          keytool -genkey -v \
+            -keystore release.jks \
+            -alias astro_key \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -storepass 123456 \
+            -keypass 123456 \
+            -dname "CN=Zakaria" \
+            -deststoretype pkcs12
 
-          # 5. البناء باستخدام تعليمات برمجية تتخطى أخطاء الدمج
+      - name: Build Release APK
+        run: |
           cd platforms/android
           chmod +x gradlew
           ./gradlew assembleRelease \
-            -Pandroid.injected.signing.store.file=$(pwd)/../../release.jks \
+            -Pandroid.injected.signing.store.file=${{ github.workspace }}/release.jks \
             -Pandroid.injected.signing.store.password=123456 \
             -Pandroid.injected.signing.key.alias=astro_key \
             -Pandroid.injected.signing.key.password=123456 \
-            -x lint
+            -x lint \
+            --stacktrace
 
-          # 6. نقل الملف الناتج
-          mkdir -p ../../output
-          cp app/build/outputs/apk/release/*.apk ../../output/Astrology_Final_Done.apk
+      - name: Copy APK
+        run: |
+          mkdir -p output
+          cp platforms/android/app/build/outputs/apk/release/*.apk output/Astrology_Final.apk
 
-      - name: Upload
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: APK_READY
