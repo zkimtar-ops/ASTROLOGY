@@ -43,39 +43,26 @@ jobs:
       - name: Add Android Platform
         run: cordova platform add android@13.0.0
 
-      - name: Install gradlew manually
+      - name: Download gradlew from Cordova repo
         run: |
           cd platforms/android
-          
-          # تحميل Gradle 8.7
-          wget -q https://services.gradle.org/distributions/gradle-8.7-bin.zip -O /tmp/gradle-8.7.zip
-          unzip -q /tmp/gradle-8.7.zip -d /tmp/
-
-          # إنشاء مجلد wrapper
           mkdir -p gradle/wrapper
 
-          # إنشاء gradle-wrapper.properties
+          # تحميل gradlew و gradle-wrapper.jar مباشرة من مستودع cordova-android الرسمي
+          curl -sL "https://raw.githubusercontent.com/apache/cordova-android/13.0.0/templates/project/gradlew" -o gradlew
+          curl -sL "https://raw.githubusercontent.com/apache/cordova-android/13.0.0/templates/project/gradle/wrapper/gradle-wrapper.jar" -o gradle/wrapper/gradle-wrapper.jar
+          
+          # إنشاء gradle-wrapper.properties بإصدار 8.7
           cat > gradle/wrapper/gradle-wrapper.properties << 'EOF'
           distributionBase=GRADLE_USER_HOME
           distributionPath=wrapper/dists
           distributionUrl=https\://services.gradle.org/distributions/gradle-8.7-bin.zip
           zipStoreBase=GRADLE_USER_HOME
           zipStorePath=wrapper/dists
-          validateDistributionUrl=true
           EOF
 
-          # نسخ gradle-wrapper.jar من Gradle المحمّل
-          cp /tmp/gradle-8.7/lib/plugins/gradle-wrapper-*.jar gradle/wrapper/gradle-wrapper.jar 2>/dev/null || \
-          find /tmp/gradle-8.7 -name "gradle-wrapper.jar" -exec cp {} gradle/wrapper/gradle-wrapper.jar \;
-
-          # إنشاء gradlew script
-          cat > gradlew << 'GRADLEW'
-          #!/bin/sh
-          exec java -jar "$(dirname "$0")/gradle/wrapper/gradle-wrapper.jar" "$@"
-          GRADLEW
-
           chmod +x gradlew
-          echo "✅ gradlew ready"
+          echo "✅ Files ready:"
           ls -la gradlew gradle/wrapper/
 
       - name: Add Plugins
@@ -109,4 +96,19 @@ jobs:
           cd platforms/android
           ./gradlew assembleRelease \
             -Pandroid.injected.signing.store.file=${{ github.workspace }}/release.jks \
-            -Pandroid.injected.s
+            -Pandroid.injected.signing.store.password=123456 \
+            -Pandroid.injected.signing.key.alias=astro_key \
+            -Pandroid.injected.signing.key.password=123456 \
+            -x lint \
+            --stacktrace
+
+      - name: Copy APK
+        run: |
+          mkdir -p output
+          cp platforms/android/app/build/outputs/apk/release/*.apk output/Astrology_Final.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: APK_READY
+          path: output/
