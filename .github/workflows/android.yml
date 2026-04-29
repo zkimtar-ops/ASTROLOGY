@@ -31,6 +31,9 @@ jobs:
       - name: Install Cordova
         run: npm install -g cordova --no-audit
 
+      - name: Install Pillow
+        run: pip install Pillow --break-system-packages --quiet
+
       - name: Create package.json
         run: |
           if [ ! -f package.json ]; then
@@ -43,7 +46,59 @@ jobs:
             }' > package.json
           fi
 
-      - name: Create clean config.xml without admob
+      - name: Generate Icons and Splash from www/1777490720589.png
+        run: |
+          python3 << 'PYEOF'
+          from PIL import Image
+          import os
+
+          src = 'www/1777490720589.png'
+          print(f"✅ الأيقونة المصدر: {src}")
+
+          os.makedirs('res/screen/android', exist_ok=True)
+          img = Image.open(src).convert('RGBA')
+
+          # أيقونات
+          icons = {
+              'res/icon.png': 512,
+              'res/icon-48.png': 48,
+              'res/icon-72.png': 72,
+              'res/icon-96.png': 96,
+              'res/icon-144.png': 144,
+              'res/icon-192.png': 192,
+          }
+          for filename, size in icons.items():
+              resized = img.resize((size, size), Image.LANCZOS)
+              resized.save(filename)
+              print(f"✅ أيقونة: {filename} ({size}x{size})")
+
+          # سبلاش - إنشاء صورة بخلفية سوداء والأيقونة في المنتصف
+          splash_sizes = {
+              'res/screen/android/splash-land-hdpi.png':  (800, 480),
+              'res/screen/android/splash-land-ldpi.png':  (320, 200),
+              'res/screen/android/splash-land-mdpi.png':  (480, 320),
+              'res/screen/android/splash-land-xhdpi.png': (1280, 720),
+              'res/screen/android/splash-port-hdpi.png':  (480, 800),
+              'res/screen/android/splash-port-ldpi.png':  (200, 320),
+              'res/screen/android/splash-port-mdpi.png':  (320, 480),
+              'res/screen/android/splash-port-xhdpi.png': (720, 1280),
+          }
+
+          for filename, (w, h) in splash_sizes.items():
+              # خلفية سوداء
+              bg = Image.new('RGBA', (w, h), (0, 0, 0, 255))
+              # حجم الأيقونة = 40% من أصغر بعد
+              icon_size = int(min(w, h) * 0.4)
+              icon = img.resize((icon_size, icon_size), Image.LANCZOS)
+              # وضع الأيقونة في المنتصف
+              x = (w - icon_size) // 2
+              y = (h - icon_size) // 2
+              bg.paste(icon, (x, y), icon)
+              bg.save(filename)
+              print(f"✅ سبلاش: {filename} ({w}x{h})")
+          PYEOF
+
+      - name: Create config.xml
         run: |
           cat > config.xml << 'EOF'
           <?xml version='1.0' encoding='utf-8'?>
@@ -57,8 +112,35 @@ jobs:
             <allow-navigation href="*" />
             <allow-intent href="http://*/*" />
             <allow-intent href="https://*/*" />
+
+            <!-- السبلاش -->
+            <preference name="SplashScreenDelay" value="2000" />
+            <preference name="AutoHideSplashScreen" value="true" />
+            <preference name="FadeSplashScreen" value="true" />
+            <preference name="FadeSplashScreenDuration" value="500" />
+            <preference name="SplashScreenBackgroundColor" value="#000000" />
+            <preference name="ShowSplashScreenSpinner" value="false" />
+
             <platform name="android">
               <allow-intent href="market:*" />
+
+              <!-- الأيقونة -->
+              <icon src="res/icon.png" />
+              <icon density="mdpi"    src="res/icon-48.png" />
+              <icon density="hdpi"    src="res/icon-72.png" />
+              <icon density="xhdpi"   src="res/icon-96.png" />
+              <icon density="xxhdpi"  src="res/icon-144.png" />
+              <icon density="xxxhdpi" src="res/icon-192.png" />
+
+              <!-- السبلاش -->
+              <splash density="land-hdpi"  src="res/screen/android/splash-land-hdpi.png" />
+              <splash density="land-ldpi"  src="res/screen/android/splash-land-ldpi.png" />
+              <splash density="land-mdpi"  src="res/screen/android/splash-land-mdpi.png" />
+              <splash density="land-xhdpi" src="res/screen/android/splash-land-xhdpi.png" />
+              <splash density="port-hdpi"  src="res/screen/android/splash-port-hdpi.png" />
+              <splash density="port-ldpi"  src="res/screen/android/splash-port-ldpi.png" />
+              <splash density="port-mdpi"  src="res/screen/android/splash-port-mdpi.png" />
+              <splash density="port-xhdpi" src="res/screen/android/splash-port-xhdpi.png" />
             </platform>
           </widget>
           EOF
@@ -69,9 +151,12 @@ jobs:
       - name: Add Android Platform
         run: cordova platform add android@13.0.0
 
-      - name: Add Only Safe Plugins
+      - name: Add Plugins
         run: |
           cordova plugin add cordova-plugin-androidx-adapter
+          cordova plugin add cordova-plugin-splashscreen
+          cordova plugin add admob-plus-cordova \
+            --variable APP_ID_ANDROID="ca-app-pub-9756015724360400~7044151619"
           cordova prepare android
 
       - name: Configure Gradle Properties
