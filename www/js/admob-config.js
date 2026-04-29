@@ -1,14 +1,23 @@
-document.addEventListener('deviceready', function() {
+function initAdMob() {
+    if (typeof admob === 'undefined') {
+        console.warn("AdMob غير متاح");
+        return;
+    }
 
     const banner = new admob.BannerAd({
         adUnitId: 'ca-app-pub-9756015724360400/7044151619',
-        position: admob.BannerAd.Position.BOTTOM,  // أو TOP
+        position: admob.BannerAd.Position.BOTTOM,
     });
 
-    banner.show().then(() => {
-        console.log("✅ البنر يعمل");
-    }).catch((e) => {
-        console.error("❌ خطأ AdMob: ", e);
-    });
+    banner.show()
+        .then(() => console.log("✅ البنر يعمل"))
+        .catch((e) => console.error("❌ خطأ AdMob:", e));
+}
 
-}, false);
+// تشغيل على الجهاز
+document.addEventListener('deviceready', initAdMob, false);
+
+// تشغيل في المتصفح للتجربة
+if (!window.cordova) {
+    window.addEventListener('load', initAdMob);
+}
