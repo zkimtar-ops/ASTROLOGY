@@ -28,7 +28,7 @@
     <platform name="android">
         <preference name="AndroidXEnabled" value="true" />
         
-        <icon src="www/icon.png"/>
+        <icon src="www/1777490720589.png"/>
         
         </platform>
 
