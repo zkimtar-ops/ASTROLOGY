@@ -46,17 +46,15 @@ jobs:
             }' > package.json
           fi
 
-      - name: Generate Icons and Splash from www/1777490720589.png
+      - name: Generate Icons and Splash
         run: |
           python3 << 'PYEOF'
-          from PIL import Image
+          from PIL import Image, ImageFilter
           import os
 
           src = 'www/1777490720589.png'
-          print(f"✅ الأيقونة المصدر: {src}")
-
-          os.makedirs('res/screen/android', exist_ok=True)
           img = Image.open(src).convert('RGBA')
+          os.makedirs('res/screen/android', exist_ok=True)
 
           # أيقونات
           icons = {
@@ -67,35 +65,44 @@ jobs:
               'res/icon-144.png': 144,
               'res/icon-192.png': 192,
           }
-          for filename, size in icons.items():
-              resized = img.resize((size, size), Image.LANCZOS)
-              resized.save(filename)
-              print(f"✅ أيقونة: {filename} ({size}x{size})")
+          for f, s in icons.items():
+              img.resize((s, s), Image.LANCZOS).save(f)
+              print(f"✅ {f}")
 
-          # سبلاش - إنشاء صورة بخلفية سوداء والأيقونة في المنتصف
-          splash_sizes = {
-              'res/screen/android/splash-land-hdpi.png':  (800, 480),
-              'res/screen/android/splash-land-ldpi.png':  (320, 200),
-              'res/screen/android/splash-land-mdpi.png':  (480, 320),
-              'res/screen/android/splash-land-xhdpi.png': (1280, 720),
+          # سبلاش - خلفية ضبابية + أيقونة واضحة في المنتصف
+          splashes = {
               'res/screen/android/splash-port-hdpi.png':  (480, 800),
-              'res/screen/android/splash-port-ldpi.png':  (200, 320),
               'res/screen/android/splash-port-mdpi.png':  (320, 480),
               'res/screen/android/splash-port-xhdpi.png': (720, 1280),
+              'res/screen/android/splash-port-ldpi.png':  (200, 320),
+              'res/screen/android/splash-land-hdpi.png':  (800, 480),
+              'res/screen/android/splash-land-mdpi.png':  (480, 320),
+              'res/screen/android/splash-land-xhdpi.png': (1280, 720),
+              'res/screen/android/splash-land-ldpi.png':  (320, 200),
           }
 
-          for filename, (w, h) in splash_sizes.items():
-              # خلفية سوداء
-              bg = Image.new('RGBA', (w, h), (0, 0, 0, 255))
-              # حجم الأيقونة = 40% من أصغر بعد
-              icon_size = int(min(w, h) * 0.4)
-              icon = img.resize((icon_size, icon_size), Image.LANCZOS)
-              # وضع الأيقونة في المنتصف
-              x = (w - icon_size) // 2
-              y = (h - icon_size) // 2
+          for f, (w, h) in splashes.items():
+              # 1. تمديد الأيقونة لتملأ الخلفية كاملاً
+              bg = img.resize((w, h), Image.LANCZOS).convert('RGBA')
+              
+              # 2. تطبيق ضباب قوي على الخلفية
+              bg = bg.filter(ImageFilter.GaussianBlur(radius=25))
+              
+              # 3. إضافة طبقة شفافية داكنة فوق الخلفية
+              overlay = Image.new('RGBA', (w, h), (0, 0, 0, 120))
+              bg = Image.alpha_composite(bg, overlay)
+              
+              # 4. الأيقونة الواضحة في المنتصف
+              size = int(min(w, h) * 0.45)
+              icon = img.resize((size, size), Image.LANCZOS)
+              x = (w - size) // 2
+              y = (h - size) // 2
               bg.paste(icon, (x, y), icon)
-              bg.save(filename)
-              print(f"✅ سبلاش: {filename} ({w}x{h})")
+              
+              bg.save(f)
+              print(f"✅ {f}")
+
+          print("✅ تم إنشاء كل الصور")
           PYEOF
 
       - name: Create config.xml
@@ -105,26 +112,35 @@ jobs:
           <widget id="com.zakaria.hoshinomichibiki" version="1.0.0"
             xmlns="http://www.w3.org/ns/widgets"
             xmlns:cdv="http://cordova.apache.org/ns/1.0">
+
             <name>星の導き</name>
-            <description>Astrology App</description>
-            <author email="zakaria@example.com" href="http://example.com">Zakaria</author>
+            <description>Astrology App by Zakaria</description>
+            <author email="dev@example.com" href="https://example.com">Zakaria Matar</author>
+
             <content src="index.html" />
+            <access origin="*" />
             <allow-navigation href="*" />
             <allow-intent href="http://*/*" />
             <allow-intent href="https://*/*" />
+            <allow-intent href="tel:*" />
+            <allow-intent href="sms:*" />
 
-            <!-- السبلاش -->
+            <plugin name="admob-plus-cordova" spec="~2.0.0">
+              <variable name="APP_ID_ANDROID" value="ca-app-pub-9756015724360400~1341007605" />
+            </plugin>
+
             <preference name="SplashScreenDelay" value="2000" />
             <preference name="AutoHideSplashScreen" value="true" />
             <preference name="FadeSplashScreen" value="true" />
-            <preference name="FadeSplashScreenDuration" value="500" />
-            <preference name="SplashScreenBackgroundColor" value="#000000" />
             <preference name="ShowSplashScreenSpinner" value="false" />
+            <preference name="SplashScreenBackgroundColor" value="#000000" />
+            <preference name="Fullscreen" value="false" />
+            <preference name="BackgroundColor" value="0xff030305" />
 
             <platform name="android">
+              <preference name="AndroidXEnabled" value="true" />
               <allow-intent href="market:*" />
 
-              <!-- الأيقونة -->
               <icon src="res/icon.png" />
               <icon density="mdpi"    src="res/icon-48.png" />
               <icon density="hdpi"    src="res/icon-72.png" />
@@ -132,7 +148,6 @@ jobs:
               <icon density="xxhdpi"  src="res/icon-144.png" />
               <icon density="xxxhdpi" src="res/icon-192.png" />
 
-              <!-- السبلاش -->
               <splash density="land-hdpi"  src="res/screen/android/splash-land-hdpi.png" />
               <splash density="land-ldpi"  src="res/screen/android/splash-land-ldpi.png" />
               <splash density="land-mdpi"  src="res/screen/android/splash-land-mdpi.png" />
@@ -142,6 +157,7 @@ jobs:
               <splash density="port-mdpi"  src="res/screen/android/splash-port-mdpi.png" />
               <splash density="port-xhdpi" src="res/screen/android/splash-port-xhdpi.png" />
             </platform>
+
           </widget>
           EOF
 
@@ -156,7 +172,7 @@ jobs:
           cordova plugin add cordova-plugin-androidx-adapter
           cordova plugin add cordova-plugin-splashscreen
           cordova plugin add admob-plus-cordova \
-            --variable APP_ID_ANDROID="ca-app-pub-9756015724360400~7044151619"
+            --variable APP_ID_ANDROID="ca-app-pub-9756015724360400~1341007605"
           cordova prepare android
 
       - name: Configure Gradle Properties
