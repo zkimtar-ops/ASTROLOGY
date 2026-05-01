@@ -8,7 +8,6 @@
   <author email="dev@example.com" href="https://example.com">Zakaria Matar</author>
 
   <content src="index.html" />
-
   <access origin="*" />
   <allow-navigation href="*" />
   <allow-intent href="http://*/*" />
@@ -16,19 +15,14 @@
   <allow-intent href="tel:*" />
   <allow-intent href="sms:*" />
 
-  <!-- AdMob -->
-  <plugin name="admob-plus-cordova" spec="~2.0.0">
+  <plugin name="admob-plus-cordova" spec="1.24.0">
     <variable name="APP_ID_ANDROID" value="ca-app-pub-9756015724360400~1341007605" />
   </plugin>
 
-  <!-- السبلاش -->
   <preference name="SplashScreenDelay" value="2000" />
   <preference name="AutoHideSplashScreen" value="true" />
   <preference name="FadeSplashScreen" value="true" />
   <preference name="ShowSplashScreenSpinner" value="false" />
-  <preference name="SplashScreenBackgroundColor" value="#000000" />
-
-  <!-- عام -->
   <preference name="Fullscreen" value="false" />
   <preference name="BackgroundColor" value="0xff030305" />
 
@@ -36,7 +30,6 @@
     <preference name="AndroidXEnabled" value="true" />
     <allow-intent href="market:*" />
 
-    <!-- الأيقونة -->
     <icon src="res/icon.png" />
     <icon density="mdpi"    src="res/icon-48.png" />
     <icon density="hdpi"    src="res/icon-72.png" />
@@ -44,15 +37,9 @@
     <icon density="xxhdpi"  src="res/icon-144.png" />
     <icon density="xxxhdpi" src="res/icon-192.png" />
 
-    <!-- السبلاش -->
-    <splash density="land-hdpi"  src="res/screen/android/splash-land-hdpi.png" />
-    <splash density="land-ldpi"  src="res/screen/android/splash-land-ldpi.png" />
-    <splash density="land-mdpi"  src="res/screen/android/splash-land-mdpi.png" />
-    <splash density="land-xhdpi" src="res/screen/android/splash-land-xhdpi.png" />
-    <splash density="port-hdpi"  src="res/screen/android/splash-port-hdpi.png" />
-    <splash density="port-ldpi"  src="res/screen/android/splash-port-ldpi.png" />
-    <splash density="port-mdpi"  src="res/screen/android/splash-port-mdpi.png" />
-    <splash density="port-xhdpi" src="res/screen/android/splash-port-xhdpi.png" />
+    <preference name="AndroidWindowSplashScreenAnimatedIcon" value="res/icon.png" />
+    <preference name="AndroidWindowSplashScreenBackground" value="#000000" />
+    <preference name="AndroidWindowSplashScreenFadeOutDuration" value="500" />
   </platform>
 
 </widget>
