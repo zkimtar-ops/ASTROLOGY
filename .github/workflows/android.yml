@@ -1,3 +1,4 @@
+```yaml
 name: Astrology_Build
 
 on:
@@ -53,7 +54,7 @@ jobs:
           import os
 
           icon_src = 'www/1777490720589.png'
-          splash_src = 'www/1777489998216_copy_1920x1080.png'
+          splash_src = 'www/splash.png'
 
           icon_img = Image.open(icon_src).convert('RGBA')
           splash_img = Image.open(splash_src).convert('RGBA')
@@ -82,62 +83,27 @@ jobs:
               'res/screen/android/splash-land-xhdpi.png': (1280, 720),
               'res/screen/android/splash-land-ldpi.png':  (320, 200),
           }
+
           for f, (w, h) in splashes.items():
-              splash_img.resize((w, h), Image.LANCZOS).save(f)
+              img_ratio = splash_img.width / splash_img.height
+              target_ratio = w / h
+
+              if img_ratio > target_ratio:
+                  new_h = h
+                  new_w = int(h * img_ratio)
+              else:
+                  new_w = w
+                  new_h = int(w / img_ratio)
+
+              resized = splash_img.resize((new_w, new_h), Image.LANCZOS)
+              left = (new_w - w) // 2
+              top = (new_h - h) // 2
+              cropped = resized.crop((left, top, left + w, top + h))
+              cropped.save(f)
               print(f"✅ سبلاش: {f}")
 
           print("✅ تم إنشاء كل الصور")
           PYEOF
-
-      - name: Create config.xml
-        run: |
-          cat > config.xml << 'EOF'
-          <?xml version='1.0' encoding='utf-8'?>
-          <widget id="com.zakaria.hoshinomichibiki" version="1.0.0"
-            xmlns="http://www.w3.org/ns/widgets"
-            xmlns:cdv="http://cordova.apache.org/ns/1.0">
-
-            <name>星の導き</name>
-            <description>Astrology App by Zakaria</description>
-            <author email="dev@example.com" href="https://example.com">Zakaria Matar</author>
-
-            <content src="index.html" />
-            <access origin="*" />
-            <allow-navigation href="*" />
-            <allow-intent href="http://*/*" />
-            <allow-intent href="https://*/*" />
-            <allow-intent href="tel:*" />
-            <allow-intent href="sms:*" />
-
-            <plugin name="admob-plus-cordova" spec="1.24.0">
-              <variable name="APP_ID_ANDROID" value="ca-app-pub-9756015724360400~1341007605" />
-            </plugin>
-
-            <preference name="SplashScreenDelay" value="2000" />
-            <preference name="AutoHideSplashScreen" value="true" />
-            <preference name="FadeSplashScreen" value="true" />
-            <preference name="ShowSplashScreenSpinner" value="false" />
-            <preference name="Fullscreen" value="false" />
-            <preference name="BackgroundColor" value="0xff030305" />
-
-            <platform name="android">
-              <preference name="AndroidXEnabled" value="true" />
-              <allow-intent href="market:*" />
-
-              <icon src="res/icon.png" />
-              <icon density="mdpi"    src="res/icon-48.png" />
-              <icon density="hdpi"    src="res/icon-72.png" />
-              <icon density="xhdpi"   src="res/icon-96.png" />
-              <icon density="xxhdpi"  src="res/icon-144.png" />
-              <icon density="xxxhdpi" src="res/icon-192.png" />
-
-              <preference name="AndroidWindowSplashScreenAnimatedIcon" value="res/icon.png" />
-              <preference name="AndroidWindowSplashScreenBackground" value="#000000" />
-              <preference name="AndroidWindowSplashScreenFadeOutDuration" value="500" />
-            </platform>
-
-          </widget>
-          EOF
 
       - name: Clean Environment
         run: rm -rf platforms plugins
@@ -151,6 +117,20 @@ jobs:
           cordova plugin add admob-plus-cordova@1.24.0 \
             --variable APP_ID_ANDROID="ca-app-pub-9756015724360400~1341007605"
           cordova prepare android
+
+      - name: Fix AdMob AndroidManifest
+        run: |
+          MANIFEST="platforms/android/app/src/main/AndroidManifest.xml"
+
+          if ! grep -q "com.google.android.gms.ads.APPLICATION_ID" "$MANIFEST"; then
+            sed -i 's|android:hardwareAccelerated="true"|android:hardwareAccelerated="true">\n        <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-9756015724360400~1341007605"/>|' "$MANIFEST"
+            echo "✅ تم إضافة APPLICATION_ID"
+          else
+            echo "✅ APPLICATION_ID موجود مسبقاً"
+          fi
+
+          echo "=== AndroidManifest بعد التعديل ==="
+          cat "$MANIFEST"
 
       - name: Fix PendingIntent crash
         run: |
@@ -269,3 +249,4 @@ jobs:
           name: AAB_READY
           path: output/Astrology_Final.aab
           if-no-files-found: warn
+```
