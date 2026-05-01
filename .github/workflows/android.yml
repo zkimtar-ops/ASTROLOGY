@@ -53,7 +53,7 @@ jobs:
           import os
 
           icon_src = 'www/1777490720589.png'
-          splash_src = 'www/splash.png'
+          splash_src = 'www/1777489998216_copy_1920x1080.png'
 
           icon_img = Image.open(icon_src).convert('RGBA')
           splash_img = Image.open(splash_src).convert('RGBA')
