@@ -157,6 +157,18 @@ jobs:
             --variable APP_ID_ANDROID="ca-app-pub-9756015724360400~1341007605"
           cordova prepare android
 
+      - name: Fix PendingIntent crash
+        run: |
+          cat >> platforms/android/app/build.gradle << 'EOF'
+
+          configurations.all {
+              resolutionStrategy {
+                  force 'androidx.work:work-runtime:2.8.1'
+                  force 'androidx.work:work-runtime-ktx:2.8.1'
+              }
+          }
+          EOF
+
       - name: Configure Gradle Properties
         run: |
           cat >> platforms/android/gradle.properties << 'EOF'
