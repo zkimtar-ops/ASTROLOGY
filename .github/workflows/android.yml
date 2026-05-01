@@ -56,7 +56,6 @@ jobs:
           img = Image.open(src).convert('RGBA')
           os.makedirs('res/screen/android', exist_ok=True)
 
-          # أيقونات
           icons = {
               'res/icon.png': 512,
               'res/icon-48.png': 48,
@@ -69,7 +68,6 @@ jobs:
               img.resize((s, s), Image.LANCZOS).save(f)
               print(f"✅ {f}")
 
-          # سبلاش - خلفية ضبابية + أيقونة واضحة في المنتصف
           splashes = {
               'res/screen/android/splash-port-hdpi.png':  (480, 800),
               'res/screen/android/splash-port-mdpi.png':  (320, 480),
@@ -80,25 +78,16 @@ jobs:
               'res/screen/android/splash-land-xhdpi.png': (1280, 720),
               'res/screen/android/splash-land-ldpi.png':  (320, 200),
           }
-
           for f, (w, h) in splashes.items():
-              # 1. تمديد الأيقونة لتملأ الخلفية كاملاً
               bg = img.resize((w, h), Image.LANCZOS).convert('RGBA')
-              
-              # 2. تطبيق ضباب قوي على الخلفية
               bg = bg.filter(ImageFilter.GaussianBlur(radius=25))
-              
-              # 3. إضافة طبقة شفافية داكنة فوق الخلفية
               overlay = Image.new('RGBA', (w, h), (0, 0, 0, 120))
               bg = Image.alpha_composite(bg, overlay)
-              
-              # 4. الأيقونة الواضحة في المنتصف
               size = int(min(w, h) * 0.45)
               icon = img.resize((size, size), Image.LANCZOS)
               x = (w - size) // 2
               y = (h - size) // 2
               bg.paste(icon, (x, y), icon)
-              
               bg.save(f)
               print(f"✅ {f}")
 
@@ -125,7 +114,7 @@ jobs:
             <allow-intent href="tel:*" />
             <allow-intent href="sms:*" />
 
-            <plugin name="admob-plus-cordova" spec="~2.0.0">
+            <plugin name="admob-plus-cordova" spec="1.24.0">
               <variable name="APP_ID_ANDROID" value="ca-app-pub-9756015724360400~1341007605" />
             </plugin>
 
@@ -133,7 +122,6 @@ jobs:
             <preference name="AutoHideSplashScreen" value="true" />
             <preference name="FadeSplashScreen" value="true" />
             <preference name="ShowSplashScreenSpinner" value="false" />
-            <preference name="SplashScreenBackgroundColor" value="#000000" />
             <preference name="Fullscreen" value="false" />
             <preference name="BackgroundColor" value="0xff030305" />
 
@@ -148,14 +136,9 @@ jobs:
               <icon density="xxhdpi"  src="res/icon-144.png" />
               <icon density="xxxhdpi" src="res/icon-192.png" />
 
-              <splash density="land-hdpi"  src="res/screen/android/splash-land-hdpi.png" />
-              <splash density="land-ldpi"  src="res/screen/android/splash-land-ldpi.png" />
-              <splash density="land-mdpi"  src="res/screen/android/splash-land-mdpi.png" />
-              <splash density="land-xhdpi" src="res/screen/android/splash-land-xhdpi.png" />
-              <splash density="port-hdpi"  src="res/screen/android/splash-port-hdpi.png" />
-              <splash density="port-ldpi"  src="res/screen/android/splash-port-ldpi.png" />
-              <splash density="port-mdpi"  src="res/screen/android/splash-port-mdpi.png" />
-              <splash density="port-xhdpi" src="res/screen/android/splash-port-xhdpi.png" />
+              <preference name="AndroidWindowSplashScreenAnimatedIcon" value="res/icon.png" />
+              <preference name="AndroidWindowSplashScreenBackground" value="#000000" />
+              <preference name="AndroidWindowSplashScreenFadeOutDuration" value="500" />
             </platform>
 
           </widget>
@@ -170,8 +153,7 @@ jobs:
       - name: Add Plugins
         run: |
           cordova plugin add cordova-plugin-androidx-adapter
-          cordova plugin add cordova-plugin-splashscreen
-          cordova plugin add admob-plus-cordova \
+          cordova plugin add admob-plus-cordova@1.24.0 \
             --variable APP_ID_ANDROID="ca-app-pub-9756015724360400~1341007605"
           cordova prepare android
 
