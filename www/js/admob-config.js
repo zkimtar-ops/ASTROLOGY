@@ -14,10 +14,4 @@ function initAdMob() {
         .catch((e) => console.error("❌ خطأ AdMob:", e));
 }
 
-// تشغيل على الجهاز
 document.addEventListener('deviceready', initAdMob, false);
-
-// تشغيل في المتصفح للتجربة
-if (!window.cordova) {
-    window.addEventListener('load', initAdMob);
-}
