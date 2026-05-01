@@ -1,4 +1,3 @@
-```yaml
 name: Astrology_Build
 
 on:
@@ -71,7 +70,7 @@ jobs:
           }
           for f, s in icons.items():
               icon_img.resize((s, s), Image.LANCZOS).save(f)
-              print(f"✅ أيقونة: {f}")
+              print(f"OK icon: {f}")
 
           splashes = {
               'res/screen/android/splash-port-hdpi.png':  (480, 800),
@@ -87,22 +86,20 @@ jobs:
           for f, (w, h) in splashes.items():
               img_ratio = splash_img.width / splash_img.height
               target_ratio = w / h
-
               if img_ratio > target_ratio:
                   new_h = h
                   new_w = int(h * img_ratio)
               else:
                   new_w = w
                   new_h = int(w / img_ratio)
-
               resized = splash_img.resize((new_w, new_h), Image.LANCZOS)
               left = (new_w - w) // 2
               top = (new_h - h) // 2
               cropped = resized.crop((left, top, left + w, top + h))
               cropped.save(f)
-              print(f"✅ سبلاش: {f}")
+              print(f"OK splash: {f}")
 
-          print("✅ تم إنشاء كل الصور")
+          print("Done")
           PYEOF
 
       - name: Clean Environment
@@ -121,15 +118,12 @@ jobs:
       - name: Fix AdMob AndroidManifest
         run: |
           MANIFEST="platforms/android/app/src/main/AndroidManifest.xml"
-
           if ! grep -q "com.google.android.gms.ads.APPLICATION_ID" "$MANIFEST"; then
             sed -i 's|android:hardwareAccelerated="true"|android:hardwareAccelerated="true">\n        <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-9756015724360400~1341007605"/>|' "$MANIFEST"
-            echo "✅ تم إضافة APPLICATION_ID"
+            echo "Added APPLICATION_ID"
           else
-            echo "✅ APPLICATION_ID موجود مسبقاً"
+            echo "APPLICATION_ID already exists"
           fi
-
-          echo "=== AndroidManifest بعد التعديل ==="
           cat "$MANIFEST"
 
       - name: Fix PendingIntent crash
@@ -155,10 +149,8 @@ jobs:
         run: |
           TOOLS_DIR="platforms/android/tools"
           mkdir -p "$TOOLS_DIR/gradle/wrapper"
-
           cp /usr/local/lib/android/sdk/extras/google/google_play_services/samples/unified/ActivityDemo/gradle/wrapper/gradle-wrapper.jar \
             "$TOOLS_DIR/gradle/wrapper/gradle-wrapper.jar"
-
           cat > "$TOOLS_DIR/gradle/wrapper/gradle-wrapper.properties" << 'EOF'
           distributionBase=GRADLE_USER_HOME
           distributionPath=wrapper/dists
@@ -166,20 +158,18 @@ jobs:
           zipStoreBase=GRADLE_USER_HOME
           zipStorePath=wrapper/dists
           EOF
-
           cat > "$TOOLS_DIR/gradlew" << 'GRADLEW'
           #!/usr/bin/env sh
           APP_HOME="$(cd "$(dirname "$0")" && pwd)"
           exec java -classpath "$APP_HOME/gradle/wrapper/gradle-wrapper.jar" \
             org.gradle.wrapper.GradleWrapperMain "$@"
           GRADLEW
-
           chmod +x "$TOOLS_DIR/gradlew"
 
       - name: Generate Keystore
         run: |
           keytool -genkey -v \
-            -keystore ${{ github.workspace }}/release.jks \
+            -keystore release.jks \
             -alias astro_key \
             -keyalg RSA \
             -keysize 2048 \
@@ -190,20 +180,22 @@ jobs:
             -deststoretype pkcs12
 
       - name: Build APK and AAB
+        env:
+          KEYSTORE_PATH: release.jks
         run: |
           GRADLEW="platforms/android/tools/gradlew"
 
-          echo "=== بناء APK ==="
+          echo "=== APK ==="
           "$GRADLEW" -p platforms/android :app:assembleRelease \
-            -Pandroid.injected.signing.store.file=${{ github.workspace }}/release.jks \
+            -Pandroid.injected.signing.store.file="$GITHUB_WORKSPACE/release.jks" \
             -Pandroid.injected.signing.store.password=123456 \
             -Pandroid.injected.signing.key.alias=astro_key \
             -Pandroid.injected.signing.key.password=123456 \
             -x lint 2>&1
 
-          echo "=== بناء AAB ==="
+          echo "=== AAB ==="
           "$GRADLEW" -p platforms/android :app:bundleRelease \
-            -Pandroid.injected.signing.store.file=${{ github.workspace }}/release.jks \
+            -Pandroid.injected.signing.store.file="$GITHUB_WORKSPACE/release.jks" \
             -Pandroid.injected.signing.store.password=123456 \
             -Pandroid.injected.signing.key.alias=astro_key \
             -Pandroid.injected.signing.key.password=123456 \
@@ -217,22 +209,22 @@ jobs:
           APK=$(find platforms/android -name "*.apk" | head -1)
           if [ -n "$APK" ]; then
             cp "$APK" output/Astrology_Final.apk
-            echo "✅ APK: $APK"
+            echo "APK done"
           else
-            echo "⚠️ لا يوجد APK"
+            echo "No APK found"
           fi
 
           AAB=$(find platforms/android -name "*.aab" | head -1)
           if [ -n "$AAB" ]; then
             cp "$AAB" output/Astrology_Final.aab
-            echo "✅ AAB: $AAB"
+            echo "AAB done"
           else
-            echo "⚠️ لا يوجد AAB"
+            echo "No AAB found"
           fi
 
           ls -la output/
           if [ -z "$(ls -A output/)" ]; then
-            echo "❌ لا يوجد أي ملف!"
+            echo "No output files"
             exit 1
           fi
 
@@ -249,4 +241,3 @@ jobs:
           name: AAB_READY
           path: output/Astrology_Final.aab
           if-no-files-found: warn
-```
