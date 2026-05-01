@@ -49,11 +49,15 @@ jobs:
       - name: Generate Icons and Splash
         run: |
           python3 << 'PYEOF'
-          from PIL import Image, ImageFilter
+          from PIL import Image
           import os
 
-          src = 'www/1777490720589.png'
-          img = Image.open(src).convert('RGBA')
+          icon_src = 'www/1777490720589.png'
+          splash_src = 'www/splash.png'
+
+          icon_img = Image.open(icon_src).convert('RGBA')
+          splash_img = Image.open(splash_src).convert('RGBA')
+
           os.makedirs('res/screen/android', exist_ok=True)
 
           icons = {
@@ -65,8 +69,8 @@ jobs:
               'res/icon-192.png': 192,
           }
           for f, s in icons.items():
-              img.resize((s, s), Image.LANCZOS).save(f)
-              print(f"✅ {f}")
+              icon_img.resize((s, s), Image.LANCZOS).save(f)
+              print(f"✅ أيقونة: {f}")
 
           splashes = {
               'res/screen/android/splash-port-hdpi.png':  (480, 800),
@@ -79,17 +83,8 @@ jobs:
               'res/screen/android/splash-land-ldpi.png':  (320, 200),
           }
           for f, (w, h) in splashes.items():
-              bg = img.resize((w, h), Image.LANCZOS).convert('RGBA')
-              bg = bg.filter(ImageFilter.GaussianBlur(radius=25))
-              overlay = Image.new('RGBA', (w, h), (0, 0, 0, 120))
-              bg = Image.alpha_composite(bg, overlay)
-              size = int(min(w, h) * 0.45)
-              icon = img.resize((size, size), Image.LANCZOS)
-              x = (w - size) // 2
-              y = (h - size) // 2
-              bg.paste(icon, (x, y), icon)
-              bg.save(f)
-              print(f"✅ {f}")
+              splash_img.resize((w, h), Image.LANCZOS).save(f)
+              print(f"✅ سبلاش: {f}")
 
           print("✅ تم إنشاء كل الصور")
           PYEOF
