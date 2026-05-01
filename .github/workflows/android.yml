@@ -1,38 +1,232 @@
-- name: Fix AdMob AndroidManifest
-        run: |
-          MANIFEST="platforms/android/app/src/main/AndroidManifest.xml"
-          
-          echo "=== المسار ==="
-          find platforms/android -name "AndroidManifest.xml" 2>/dev/null
-          
-          # البحث عن الملف في أي مكان
-          MANIFEST=$(find platforms/android -name "AndroidManifest.xml" | head -1)
-          
-          if [ -z "$MANIFEST" ]; then
-            echo "لم يُوجد AndroidManifest.xml"
-            exit 1
-          fi
-          
-          echo "=== الملف قبل التعديل ==="
-          cat "$MANIFEST"
-          
-          # إضافة APPLICATION_ID
-          python3 << PYEOF
-          import re
+name: Astrology_Build
+on:
+  push:
+    branches: [ main ]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-          path = "$MANIFEST"
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android Build Tools
+        run: sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+
+      - name: Install Cordova
+        run: npm install -g cordova --no-audit
+
+      - name: Install Pillow
+        run: pip install Pillow --break-system-packages --quiet
+
+      - name: Create package.json
+        run: |
+          if [ ! -f package.json ]; then
+            echo '{"name":"hoshinomichibiki","version":"1.0.0","description":"Astrology App","author":"Zakaria","license":"ISC"}' > package.json
+          fi
+
+      - name: Generate Icons and Splash
+        run: |
+          python3 << 'PYEOF'
+          from PIL import Image
+          import os
+          icon_src = 'www/1777490720589.png'
+          splash_src = 'www/1777489998216_copy_1920x1080.png'
+          icon_img = Image.open(icon_src).convert('RGBA')
+          splash_img = Image.open(splash_src).convert('RGBA')
+          os.makedirs('res/screen/android', exist_ok=True)
+          icons = {
+              'res/icon.png': 512,
+              'res/icon-48.png': 48,
+              'res/icon-72.png': 72,
+              'res/icon-96.png': 96,
+              'res/icon-144.png': 144,
+              'res/icon-192.png': 192,
+          }
+          for f, s in icons.items():
+              icon_img.resize((s, s), Image.LANCZOS).save(f)
+              print('OK icon: ' + f)
+          splashes = {
+              'res/screen/android/splash-port-hdpi.png':  (480, 800),
+              'res/screen/android/splash-port-mdpi.png':  (320, 480),
+              'res/screen/android/splash-port-xhdpi.png': (720, 1280),
+              'res/screen/android/splash-port-ldpi.png':  (200, 320),
+              'res/screen/android/splash-land-hdpi.png':  (800, 480),
+              'res/screen/android/splash-land-mdpi.png':  (480, 320),
+              'res/screen/android/splash-land-xhdpi.png': (1280, 720),
+              'res/screen/android/splash-land-ldpi.png':  (320, 200),
+          }
+          for f, (w, h) in splashes.items():
+              img_ratio = splash_img.width / splash_img.height
+              target_ratio = w / h
+              if img_ratio > target_ratio:
+                  new_h = h
+                  new_w = int(h * img_ratio)
+              else:
+                  new_w = w
+                  new_h = int(w / img_ratio)
+              resized = splash_img.resize((new_w, new_h), Image.LANCZOS)
+              left = (new_w - w) // 2
+              top = (new_h - h) // 2
+              cropped = resized.crop((left, top, left + w, top + h))
+              cropped.save(f)
+              print('OK splash: ' + f)
+          print('Done')
+          PYEOF
+
+      - name: Clean Environment
+        run: rm -rf platforms plugins
+
+      - name: Add Android Platform
+        run: cordova platform add android@13.0.0
+
+      - name: Add Plugins
+        run: |
+          cordova plugin add cordova-plugin-androidx-adapter
+          cordova plugin add admob-plus-cordova@1.24.0 --variable APP_ID_ANDROID="ca-app-pub-9756015724360400~1341007605"
+          cordova prepare android
+
+      - name: Fix AdMob AndroidManifest
+        run: |
+          MANIFEST=$(find platforms/android -name "AndroidManifest.xml" | head -1)
+          echo "Found: $MANIFEST"
+          python3 - << 'PYEOF'
+          import os
+          import glob
+          files = glob.glob('platforms/android/**/AndroidManifest.xml', recursive=True)
+          print('Files found:', files)
+          if not files:
+              print('No AndroidManifest.xml found')
+              exit(1)
+          path = files[0]
           with open(path, 'r') as f:
               content = f.read()
-
           meta = '        <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-9756015724360400~1341007605"/>\n'
-
           if 'APPLICATION_ID' not in content:
               content = content.replace('<application', meta + '    <application', 1)
               with open(path, 'w') as f:
                   f.write(content)
-              print("تم إضافة APPLICATION_ID")
+              print('Added APPLICATION_ID')
           else:
-              print("APPLICATION_ID موجود مسبقاً")
-
+              print('APPLICATION_ID already exists')
           print(open(path).read())
           PYEOF
+
+      - name: Fix PendingIntent crash
+        run: |
+          cat >> platforms/android/app/build.gradle << 'EOF'
+          configurations.all {
+              resolutionStrategy {
+                  force 'androidx.work:work-runtime:2.8.1'
+                  force 'androidx.work:work-runtime-ktx:2.8.1'
+              }
+          }
+          EOF
+
+      - name: Configure Gradle Properties
+        run: |
+          cat >> platforms/android/gradle.properties << 'EOF'
+          android.useAndroidX=true
+          android.enableJetifier=true
+          EOF
+
+      - name: Setup Gradle Wrapper
+        run: |
+          TOOLS_DIR="platforms/android/tools"
+          mkdir -p "$TOOLS_DIR/gradle/wrapper"
+          cp /usr/local/lib/android/sdk/extras/google/google_play_services/samples/unified/ActivityDemo/gradle/wrapper/gradle-wrapper.jar "$TOOLS_DIR/gradle/wrapper/gradle-wrapper.jar"
+          cat > "$TOOLS_DIR/gradle/wrapper/gradle-wrapper.properties" << 'EOF'
+          distributionBase=GRADLE_USER_HOME
+          distributionPath=wrapper/dists
+          distributionUrl=https\://services.gradle.org/distributions/gradle-8.7-bin.zip
+          zipStoreBase=GRADLE_USER_HOME
+          zipStorePath=wrapper/dists
+          EOF
+          cat > "$TOOLS_DIR/gradlew" << 'GRADLEW'
+          #!/usr/bin/env sh
+          APP_HOME="$(cd "$(dirname "$0")" && pwd)"
+          exec java -classpath "$APP_HOME/gradle/wrapper/gradle-wrapper.jar" org.gradle.wrapper.GradleWrapperMain "$@"
+          GRADLEW
+          chmod +x "$TOOLS_DIR/gradlew"
+
+      - name: Generate Keystore
+        run: |
+          keytool -genkey -v \
+            -keystore release.jks \
+            -alias astro_key \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -storepass 123456 \
+            -keypass 123456 \
+            -dname "CN=Zakaria" \
+            -deststoretype pkcs12
+
+      - name: Build APK and AAB
+        run: |
+          GRADLEW="platforms/android/tools/gradlew"
+          echo "=== APK ==="
+          "$GRADLEW" -p platforms/android :app:assembleRelease \
+            -Pandroid.injected.signing.store.file="$GITHUB_WORKSPACE/release.jks" \
+            -Pandroid.injected.signing.store.password=123456 \
+            -Pandroid.injected.signing.key.alias=astro_key \
+            -Pandroid.injected.signing.key.password=123456 \
+            -x lint 2>&1
+          echo "=== AAB ==="
+          "$GRADLEW" -p platforms/android :app:bundleRelease \
+            -Pandroid.injected.signing.store.file="$GITHUB_WORKSPACE/release.jks" \
+            -Pandroid.injected.signing.store.password=123456 \
+            -Pandroid.injected.signing.key.alias=astro_key \
+            -Pandroid.injected.signing.key.password=123456 \
+            -x lint 2>&1
+        continue-on-error: true
+
+      - name: Copy Output Files
+        run: |
+          mkdir -p output
+          APK=$(find platforms/android -name "*.apk" | head -1)
+          if [ -n "$APK" ]; then
+            cp "$APK" output/Astrology_Final.apk
+            echo "APK done"
+          else
+            echo "No APK found"
+          fi
+          AAB=$(find platforms/android -name "*.aab" | head -1)
+          if [ -n "$AAB" ]; then
+            cp "$AAB" output/Astrology_Final.aab
+            echo "AAB done"
+          else
+            echo "No AAB found"
+          fi
+          ls -la output/
+          if [ -z "$(ls -A output/)" ]; then
+            echo "No output files"
+            exit 1
+          fi
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: APK_READY
+          path: output/Astrology_Final.apk
+          if-no-files-found: warn
+
+      - name: Upload AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: AAB_READY
+          path: output/Astrology_Final.aab
+          if-no-files-found: warn
